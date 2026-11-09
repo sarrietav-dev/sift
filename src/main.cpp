@@ -98,7 +98,7 @@ QString usage() {
         "  sift list [--unread|--reading|--read] [--json]\n"
         "  sift export <id|url>              Markdown to stdout\n"
         "  sift play <id|url>                open and start reading\n"
-        "  sift queue add <id|url>           append to the queue\n\n"
+        "  sift queue add <id|url>           queue a saved page\n\n"
         "The Kokoro endpoint is configured in sift's Settings.\n");
 }
 
