@@ -42,6 +42,8 @@ private slots:
         QCOMPARE(theme.accent(), QString("#FFD60A"));
         QCOMPARE(theme.accentForeground(), QString("black"));
         QCOMPARE(theme.dark(), true);
+        QVERIFY(theme.panel() != theme.foreground());
+        QVERIFY(theme.borderColor() != theme.foreground());
     }
 
     void themeReadsOmarchyColors() {

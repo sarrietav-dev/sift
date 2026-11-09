@@ -17,6 +17,14 @@ QString colorOr(const QString &value, const QString &fallback)
     static const QRegularExpression valid("^#[0-9a-fA-F]{6}$");
     return valid.match(value).hasMatch() ? value.toLower() : fallback;
 }
+
+QString blend(const QString &background, const QString &foreground, double amount)
+{
+    const QColor bg(background), fg(foreground);
+    return QColor::fromRgbF(bg.redF() * (1 - amount) + fg.redF() * amount,
+                            bg.greenF() * (1 - amount) + fg.greenF() * amount,
+                            bg.blueF() * (1 - amount) + fg.blueF() * amount).name();
+}
 }
 
 Theme::Theme(const QString &directory, QObject *parent, const QString &hyprctl)
@@ -115,12 +123,12 @@ void Theme::reload() {
     const QString selection = colorOr(readValue(colors, "selection"), m_selection);
     const QString red = colorOr(readValue(colors, "red"), m_red);
     const QString green = colorOr(readValue(colors, "green"), m_green);
-    const QString darkBackground = colorOr(readValue(colors, "dark_background"), background);
-    const QString lighterBackground = colorOr(readValue(colors, "lighter_background"), foreground);
-    const QString darkerBackground = colorOr(readValue(colors, "darker_background"), darkBackground);
+    const QString darkBackground = colorOr(readValue(colors, "dark_background"), blend(background, foreground, 0.08));
+    const QString lighterBackground = colorOr(readValue(colors, "lighter_background"), blend(background, foreground, 0.08));
+    const QString darkerBackground = colorOr(readValue(colors, "darker_background"), blend(background, foreground, 0.2));
     const bool isDark = mode == "dark";
     const QString panel = isDark ? lighterBackground : darkBackground;
-    const QString border = isDark ? lighterBackground : darkerBackground;
+    const QString border = isDark ? blend(background, foreground, 0.2) : darkerBackground;
 
     const bool colorChanged = accent != m_accent || background != m_background || foreground != m_foreground
         || muted != m_muted || selection != m_selection || panel != m_panel || border != m_border
