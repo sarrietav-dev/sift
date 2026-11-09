@@ -16,27 +16,34 @@ Button {
     Accessible.name: hint !== "" ? hint : text
     ToolTip.visible: hovered && hint !== ""
     ToolTip.text: hint
-    contentItem: Row {
-        id: contentRow
-        anchors.centerIn: parent
-        spacing: control.text !== "" && control.iconPath !== "" ? 7 : 0
-        SiftIcon {
-            visible: control.iconPath !== ""
-            path: control.iconPath
-            filled: control.iconFilled
-            size: control.iconSize
-            color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        Text {
-            id: label
-            visible: control.text !== ""
-            text: control.text
-            font: control.font
-            color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            anchors.verticalCenter: parent.verticalCenter
+    // The control positions its contentItem inside its padding. Centre the
+    // icon and label inside that area rather than positioning them at its
+    // left edge, which is what happens when the content item is a Row itself.
+    contentItem: Item {
+        implicitWidth: contentRow.implicitWidth
+        implicitHeight: contentRow.implicitHeight
+        Row {
+            id: contentRow
+            anchors.centerIn: parent
+            spacing: control.text !== "" && control.iconPath !== "" ? 7 : 0
+            SiftIcon {
+                visible: control.iconPath !== ""
+                path: control.iconPath
+                filled: control.iconFilled
+                size: control.iconSize
+                color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+                id: label
+                visible: control.text !== ""
+                text: control.text
+                font: control.font
+                color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
     background: Rectangle {
