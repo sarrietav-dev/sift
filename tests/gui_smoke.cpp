@@ -1,0 +1,104 @@
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickStyle>
+#include <QQuickWindow>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QtTest>
+#include <QtWebEngineQuick/QtWebEngineQuick>
+
+#include "backend.h"
+#include "library.h"
+#include "theme.h"
+#include "translator.h"
+
+class GuiSmoke : public QObject {
+    Q_OBJECT
+private slots:
+    void readerAndDialogs() {
+        QString id, error;
+        {
+            Library library;
+            QVariantMap article{{"url", "https://example.com/test"},
+                                {"canonicalUrl", "https://example.com/test"},
+                                {"title", "The Quiet Art of Reading"}, {"domain", "example.com"},
+                                {"author", "Example Author"}, {"language", "en"},
+                                {"wordCount", 12},
+                                {"contentHtml", "<p>Reading is a conversation with someone who is not in the room. The page waits, patient and exact, until you are ready to continue.</p>"
+                                                "<p>We tend to treat attention as a resource to spend, but a good essay asks for something quieter: a willingness to follow one thought all the way to its end.</p>"
+                                                "<h2>A small practice</h2><p>Set the page in front of you and let the room go soft. Read one paragraph twice. Notice where your mind pulls away, and bring it back without scolding yourself.</p>"
+                                                "<blockquote>The reader who stops to think is not falling behind. They are doing the work.</blockquote>"},
+                                {"markdown", "A first sentence. A second sentence."},
+                                {"contentText", "A first sentence. A second sentence."}};
+            QVERIFY2(library.saveArticle(article, &id, &error), qPrintable(error));
+            QVERIFY(library.addToQueue(id));
+        }
+        Theme theme(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/missing");
+        Translator translator;
+        Backend backend(&theme);
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty("theme", &theme);
+        engine.rootContext()->setContextProperty("translator", &translator);
+        engine.rootContext()->setContextProperty("backend", &backend);
+        engine.load(QUrl("qrc:/Main.qml"));
+        QVERIFY(!engine.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QSignalSpy readerLoad(&backend, &Backend::readerLoad);
+        backend.openArticle(id, false);
+        QCOMPARE(readerLoad.size(), 1);
+        const QString html = readerLoad.first().at(0).toString();
+        QVERIFY(html.contains("<h1 id=\"sift-title\">The Quiet Art of Reading</h1>"));
+        QVERIFY(html.contains("By Example Author"));
+        QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 0, 15000);
+        QCOMPARE(backend.queue().size(), 1);
+        QCOMPARE(backend.currentArticle().value("id").toString(), id);
+        QCOMPARE(backend.playing(), false);
+        backend.seekSentence(1);
+        QCOMPARE(backend.currentSentence(), 1);
+        QCOMPARE(backend.playing(), false);
+
+        window->resize(1180, 780);
+        QTest::qWait(300);
+        const QImage screenshot = window->grabWindow();
+        QVERIFY(!screenshot.isNull());
+        if (qEnvironmentVariableIsSet("SIFT_GUI_SCREENSHOT"))
+            QVERIFY(screenshot.save(qEnvironmentVariable("SIFT_GUI_SCREENSHOT")));
+        window->resize(560, 520);
+        QTest::keyClick(window, Qt::Key_F);
+        QTRY_COMPARE(window->property("focusMode").toBool(), false);
+        QTest::qWait(200);
+        if (qEnvironmentVariableIsSet("SIFT_GUI_QUEUE_SCREENSHOT"))
+            QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_QUEUE_SCREENSHOT")));
+        for (const char *name : {"addDialog", "voiceDialog", "settingsDialog"}) {
+            QObject *dialog = window->findChild<QObject *>(name);
+            QVERIFY2(dialog, name);
+            QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+            QTRY_VERIFY(dialog->property("visible").toBool());
+            QTest::qWait(100);
+            if (QByteArray(name) == "settingsDialog" && qEnvironmentVariableIsSet("SIFT_GUI_SETTINGS_SCREENSHOT"))
+                QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_SETTINGS_SCREENSHOT")));
+            QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+            QTRY_VERIFY(!dialog->property("visible").toBool());
+        }
+    }
+};
+
+int main(int argc, char **argv) {
+    QTemporaryDir home;
+    if (!home.isValid()) return 1;
+    qputenv("HOME", home.path().toUtf8());
+    qputenv("XDG_DATA_HOME", (home.path() + "/data").toUtf8());
+    qputenv("XDG_CONFIG_HOME", (home.path() + "/config").toUtf8());
+    qputenv("XDG_CACHE_HOME", (home.path() + "/cache").toUtf8());
+    qputenv("QTWEBENGINE_DISABLE_SANDBOX", "1");
+    QtWebEngineQuick::initialize();
+    QGuiApplication app(argc, argv);
+    QCoreApplication::setApplicationName("sift");
+    QQuickStyle::setStyle("Basic");
+    GuiSmoke test;
+    return QTest::qExec(&test, argc, argv);
+}
+
+#include "gui_smoke.moc"

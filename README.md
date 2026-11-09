@@ -46,14 +46,15 @@ The endpoint is configurable in Settings if you use a different host or port.
 sift                              # open the app
 sift <url>                        # open a page and read it
 sift add <url>                    # clip it without opening the window
-sift list                         # list the library
+sift list                         # list saved pages
 sift play <id|url>                # open and start reading
 sift export <id>                  # Markdown to stdout
-sift queue add <id|url>           # append to the reading queue
+sift queue add <id|url>           # queue a previously saved page
 ```
 
-`add` and `list` support `--json`; `add` also accepts `--tags a,b` and
-`--playlist name`. A running app refreshes itself after a headless `add`.
+`add` and `list` support `--json`. The headless `add` command saves a page
+without adding it to the queue; use `queue add` with its ID or saved URL to queue it. A running app
+refreshes itself after a headless `add`.
 
 ## Keyboard
 
@@ -72,12 +73,15 @@ sift queue add <id|url>           # append to the reading queue
 | `?` | All shortcuts |
 | `Q` | Quit |
 
-Clicking any sentence starts reading from there. `Alt+click` on a link opens
+The queue can be reordered or cleared from its menus; removing an item does not
+delete its saved files. Clicking any sentence starts reading from there. Manually
+scrolling suspends following; choose **Return to playback** to resume it.
+`Alt+click` on a link opens
 it as a new sift article; a normal click opens it in your browser.
 
 ## Where things live
 
-- Library index: `~/.local/share/sift/sift.db`
+- Saved-page and queue index: `~/.local/share/sift/sift.db`
 - Article snapshots: `~/.local/share/sift/articles/<id>/content.html`
 - Markdown exports: `~/Documents/sift/<slug>-<hash>.md` (configurable)
 - Kokoro audio cache: `~/.cache/sift/audio/` (1 GB cap by default)
@@ -115,9 +119,11 @@ voice, speed, and text. Code blocks and tables are skipped when speaking.
 
 ## Development
 
-`bin/test` covers the theme reader, translator fallbacks and plurals, the SQLite
-library, Markdown/frontmatter generation, search, tags, re-clipping, playlists,
-the queue, and deletion.
+`bin/test` covers theme fallbacks, translation, saved articles and queue
+operations. It also launches the real QML and WebEngine reader offscreen with
+an isolated temporary home, checks sentence seeking and the queue, and opens
+the main dialogs. The GUI test disables the Chromium sandbox for that isolated
+test process; the application does not disable it.
 
 The app scaffolding follows Omacut and Monologue (MIT, David Heinemeier
 Hansson). Defuddle is MIT, copyright Steph Ango; its license is in

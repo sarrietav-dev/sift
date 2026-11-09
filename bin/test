@@ -8,3 +8,9 @@ cd "$ROOT/build/tests"
 qmake6 "$ROOT/tests/sift_tests.pro"
 make -j"$(nproc)"
 QT_QPA_PLATFORM=offscreen ./sift_tests
+
+mkdir -p "$ROOT/build/gui-tests"
+cd "$ROOT/build/gui-tests"
+qmake6 "$ROOT/tests/gui_smoke.pro"
+make -j4
+QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 ./sift_gui_smoke
