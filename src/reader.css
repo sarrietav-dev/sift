@@ -25,7 +25,7 @@ body {
     padding: 0;
     background: var(--sift-bg);
     color: var(--sift-fg);
-    font-family: "IBM Plex Serif", "Libertinus Serif", "Liberation Serif", Georgia, serif;
+    font-family: var(--sift-body-font, "IBM Plex Serif", "Liberation Serif", Georgia, serif);
     font-size: var(--sift-font-size);
     line-height: 1.68;
     text-rendering: optimizeLegibility;
@@ -69,7 +69,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
     margin: 2.1em 0 0.6em;
     color: var(--sift-fg);
-    font-family: "Noto Sans", "Liberation Sans", sans-serif;
+    font-family: var(--sift-body-font, "IBM Plex Serif", "Liberation Serif", Georgia, serif);
     font-weight: 650;
     line-height: 1.18;
     letter-spacing: -0.015em;

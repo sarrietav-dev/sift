@@ -17,6 +17,7 @@ sentence with a local Kokoro voice.
   and speed picker.
 - Keeps a single reading queue that advances automatically.
 - Follows the Omarchy theme, light/dark mode, window rounding, and language.
+- Lets you choose any installed font and text size for the reading view.
 
 ## Requirements
 

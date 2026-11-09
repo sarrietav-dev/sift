@@ -209,6 +209,7 @@
         if (theme.panel) root.setProperty('--sift-panel', theme.panel);
         if (theme.border) root.setProperty('--sift-border', theme.border);
         if (theme.radius !== undefined) root.setProperty('--sift-radius', theme.radius + 'px');
+        if (theme.font) root.setProperty('--sift-body-font', '"' + theme.font + '", "Liberation Serif", Georgia, serif');
         return true;
     };
 

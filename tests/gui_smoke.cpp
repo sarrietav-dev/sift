@@ -37,6 +37,12 @@ private slots:
         Theme theme(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/missing");
         Translator translator;
         Backend backend(&theme);
+        QVERIFY(!backend.fonts().isEmpty());
+        const QString chosenFont = backend.fonts().contains("IBM Plex Serif")
+            ? QStringLiteral("IBM Plex Serif") : backend.fonts().first().toString();
+        backend.applySettings(QVariantMap{{"readerFont", chosenFont}});
+        QCOMPARE(backend.readerFont(), chosenFont);
+        QCOMPARE(backend.settings().value("readerFont").toString(), chosenFont);
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty("theme", &theme);
         engine.rootContext()->setContextProperty("translator", &translator);
@@ -51,6 +57,7 @@ private slots:
         const QString html = readerLoad.first().at(0).toString();
         QVERIFY(html.contains("<h1 id=\"sift-title\">The Quiet Art of Reading</h1>"));
         QVERIFY(html.contains("By Example Author"));
+        QVERIFY(html.contains("--sift-body-font:"));
         QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 0, 15000);
         QTRY_VERIFY_WITH_TIMEOUT(window->property("readerPainted").toBool(), 5000);
         QObject *cover = window->findChild<QObject *>("readerCover");

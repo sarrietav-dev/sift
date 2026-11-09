@@ -42,6 +42,8 @@ class Backend : public QObject {
     Q_PROPERTY(int currentSentence READ currentSentence NOTIFY currentSentenceChanged)
     Q_PROPERTY(int sentenceCount READ sentenceCount NOTIFY sentenceCountChanged)
     Q_PROPERTY(int fontSize READ fontSize NOTIFY fontSizeChanged)
+    Q_PROPERTY(QString readerFont READ readerFont NOTIFY readerFontChanged)
+    Q_PROPERTY(QVariantList fonts READ fonts CONSTANT)
     Q_PROPERTY(double speed READ speed NOTIFY speedChanged)
 
 public:
@@ -52,6 +54,7 @@ public:
     QVariantList queue() const { return m_queue; }
     QVariantList tags() const { return m_tags; }
     QVariantList voices() const;
+    QVariantList fonts() const;
     QVariantList selectedPlaylistItems() const { return m_selectedPlaylistItems; }
     QVariantMap currentArticle() const { return m_current; }
     QString selectedPlaylistId() const { return m_selectedPlaylistId; }
@@ -75,6 +78,7 @@ public:
     int currentSentence() const;
     int sentenceCount() const;
     int fontSize() const { return m_fontSize; }
+    QString readerFont() const { return m_readerFont; }
     double speed() const;
 
     Q_INVOKABLE void addUrl(const QString &url);
@@ -98,6 +102,7 @@ public:
     Q_INVOKABLE void setTag(const QString &tag);
     Q_INVOKABLE void setSection(const QString &section);
     Q_INVOKABLE void setFontSize(int size);
+    Q_INVOKABLE void setReaderFont(const QString &family);
 
     Q_INVOKABLE void toggleCurrentRead();
     Q_INVOKABLE void markCurrentRead();
@@ -151,6 +156,7 @@ signals:
     void kokoroChanged();
     void settingsChanged();
     void fontSizeChanged();
+    void readerFontChanged();
     void busyChanged();
     void progressChanged();
     void playingChanged();
@@ -201,6 +207,7 @@ private:
     QString m_status = tr("Ready");
     QString m_error;
     int m_fontSize = 19;
+    QString m_readerFont = "IBM Plex Serif";
     int m_queueIndex = -1;
     int m_startSentence = 0;
     bool m_fromQueue = false;

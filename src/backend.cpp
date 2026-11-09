@@ -11,6 +11,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QRegularExpression>
 #include <QUrl>
@@ -59,6 +60,9 @@ Backend::Backend(Theme *theme, QObject *parent)
 
 void Backend::loadSettings() {
     m_fontSize = qBound(14, m_library->setting("font_size", "19").toInt(), 32);
+    const QString savedFont = m_library->setting("reader_font", "IBM Plex Serif");
+    if (!savedFont.trimmed().isEmpty())
+        m_readerFont = savedFont;
     m_kokoro->setEndpoint(m_library->setting("kokoro_url", "http://127.0.0.1:8880"));
     m_tts->setVoice(m_library->setting("voice", "af_heart"));
     m_tts->setSpeed(m_library->setting("speed", "1.0").toDouble());
@@ -66,6 +70,14 @@ void Backend::loadSettings() {
 }
 
 QVariantList Backend::voices() const { return m_kokoro->voices(); }
+
+QVariantList Backend::fonts() const {
+    QVariantList families;
+    const QStringList available = QFontDatabase::families();
+    for (const QString &family : available)
+        families << family;
+    return families;
+}
 QString Backend::voice() const { return m_tts->voice(); }
 QString Backend::ttsStatus() const { return m_tts->status(); }
 QString Backend::kokoroStatus() const { return m_kokoro->status(); }
@@ -357,6 +369,16 @@ void Backend::setFontSize(int size) {
     emit settingsChanged();
 }
 
+void Backend::setReaderFont(const QString &family) {
+    const QString clean = family.trimmed();
+    if (clean.isEmpty() || clean == m_readerFont)
+        return;
+    m_readerFont = clean;
+    m_library->setSetting("reader_font", clean);
+    emit readerFontChanged();
+    emit settingsChanged();
+}
+
 void Backend::toggleCurrentRead() {
     if (m_currentId.isEmpty())
         return;
@@ -583,6 +605,7 @@ QVariantMap Backend::settings() const {
     values["speed"] = m_tts->speed();
     values["cacheLimitMb"] = m_library->setting("cache_limit_mb", "1024").toInt();
     values["fontSize"] = m_fontSize;
+    values["readerFont"] = m_readerFont;
     values["autoAdvance"] = m_library->setting("auto_advance", "1") == "1";
     return values;
 }
@@ -607,6 +630,8 @@ void Backend::applySettings(const QVariantMap &settings) {
     }
     if (settings.contains("fontSize"))
         setFontSize(settings.value("fontSize").toInt());
+    if (settings.contains("readerFont"))
+        setReaderFont(settings.value("readerFont").toString());
     if (settings.contains("autoAdvance"))
         m_library->setSetting("auto_advance", settings.value("autoAdvance").toBool() ? "1" : "0");
     if (settings.contains("kokoroUrl")) {
@@ -686,13 +711,17 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
         + (!author.isEmpty() && !published.isEmpty() ? QStringLiteral(" · ") : QString())
         + published;
 
+    QString cssFont = m_readerFont;
+    cssFont.remove(QRegularExpression("[\\\";{}]"));
+    const QString bodyFont = QStringLiteral("\"%1\", \"Liberation Serif\", Georgia, serif").arg(cssFont);
     const QString variables = QStringLiteral(
         ":root{--sift-bg:%1;--sift-fg:%2;--sift-muted:%3;--sift-accent:%4;"
         "--sift-selection:%5;--sift-panel:%6;--sift-border:%7;--sift-radius:%8px;"
-        "--sift-font-size:%9px;}")
+        "--sift-font-size:%9px;--sift-body-font:%10;}")
         .arg(background, foreground, muted, accent, selection, panel, border)
         .arg(radius)
-        .arg(m_fontSize);
+        .arg(m_fontSize)
+        .arg(bodyFont);
 
     return QStringLiteral(
         "<!doctype html><html lang=\"%1\" dir=\"%2\"><head><meta charset=\"utf-8\">"

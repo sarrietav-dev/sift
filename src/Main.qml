@@ -52,7 +52,8 @@ ApplicationWindow {
             selection: theme.selection,
             panel: theme.panel,
             border: theme.border,
-            radius: theme.radius
+            radius: theme.radius,
+            font: backend.readerFont.replace(/["\\]/g, "")
         }) + ");")
         readerView.runJavaScript("siftSetFontSize(" + backend.fontSize + ");")
     }
@@ -484,6 +485,9 @@ ApplicationWindow {
         function onFontSizeChanged() {
             if (backend.hasArticle && win.readerReady)
                 readerView.runJavaScript("siftSetFontSize(" + backend.fontSize + ");")
+        }
+        function onReaderFontChanged() {
+            win.applyReaderTheme()
         }
         function onCurrentArticleChanged() {
             win.applyReaderTheme()
