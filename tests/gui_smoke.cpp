@@ -55,9 +55,6 @@ private slots:
         QCOMPARE(backend.queue().size(), 1);
         QCOMPARE(backend.currentArticle().value("id").toString(), id);
         QCOMPARE(backend.playing(), false);
-        backend.seekSentence(1);
-        QCOMPARE(backend.currentSentence(), 1);
-        QCOMPARE(backend.playing(), false);
 
         window->resize(1180, 780);
         QTest::qWait(300);
@@ -65,6 +62,10 @@ private slots:
         QVERIFY(!screenshot.isNull());
         if (qEnvironmentVariableIsSet("SIFT_GUI_SCREENSHOT"))
             QVERIFY(screenshot.save(qEnvironmentVariable("SIFT_GUI_SCREENSHOT")));
+
+        backend.seekSentence(1);
+        QCOMPARE(backend.currentSentence(), 1);
+        QCOMPARE(backend.playing(), false);
         window->resize(560, 520);
         QTest::keyClick(window, Qt::Key_F);
         QTRY_COMPARE(window->property("focusMode").toBool(), false);
