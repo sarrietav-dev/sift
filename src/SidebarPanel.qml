@@ -105,6 +105,33 @@ Rectangle {
                 FlatButton { anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("+ Add page"); enabled: !backend.busy; onClicked: sidebar.addPage() }
             }
         }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 34
+            color: theme.background
+            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: theme.border }
+            Label {
+                anchors.centerIn: parent
+                text: qsTr("J/K move  ·  Enter open  ·  F close")
+                color: theme.muted
+                font.family: theme.monoFont
+                font.pixelSize: 10
+            }
+        }
+    }
+
+    Connections {
+        target: backend
+        function onCurrentArticleChanged() {
+            if (!backend.hasArticle)
+                return
+            for (let i = 0; i < backend.queue.length; i++) {
+                if (backend.queue[i].id === backend.currentArticle.id) {
+                    queueList.currentIndex = i
+                    return
+                }
+            }
+        }
     }
     SiftDialog {
         id: clearDialog

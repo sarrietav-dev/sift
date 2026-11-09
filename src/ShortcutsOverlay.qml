@@ -67,7 +67,8 @@ Rectangle {
                     { key: "J / K", action: qsTr("Move in the queue, or scroll the article") },
                     { key: "Enter", action: qsTr("Open the selected page") },
                     { key: "E", action: qsTr("Copy the Markdown export") },
-                    { key: "F", action: qsTr("Show or hide the queue") },
+                    { key: "F / Esc", action: qsTr("Show or hide the queue") },
+                    { key: "Ctrl+,", action: qsTr("Settings") },
                     { key: "PageUp / PageDown", action: qsTr("Scroll the article") },
                     { key: "Q", action: qsTr("Quit") }
                 ]

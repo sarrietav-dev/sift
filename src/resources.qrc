@@ -9,8 +9,6 @@
         <file alias="AddPageDialog.qml">AddPageDialog.qml</file>
         <file alias="VoicePickerDialog.qml">VoicePickerDialog.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
-        <file alias="TagsDialog.qml">TagsDialog.qml</file>
-        <file alias="PlaylistPickerDialog.qml">PlaylistPickerDialog.qml</file>
         <file alias="ShortcutsOverlay.qml">ShortcutsOverlay.qml</file>
         <file alias="reader.css">reader.css</file>
         <file alias="reader.js">reader.js</file>

@@ -40,7 +40,7 @@ Rectangle {
         }
 
         Label {
-            visible: parent.width > 850
+            visible: player.width > 1000
             Layout.preferredWidth: 100
             text: backend.buffering ? qsTr("Preparing…") : backend.playing ? qsTr("Listening") : qsTr("Paused")
             color: theme.muted
@@ -85,6 +85,7 @@ Rectangle {
             Accessible.name: qsTr("Sentence %1 of %2").arg(backend.currentSentence + 1).arg(backend.sentenceCount)
         }
         FlatButton {
+            visible: player.width > 620
             text: backend.speed.toFixed(1) + "×"
             hint: qsTr("Playback speed; use − and + to change")
             font.pixelSize: 12
@@ -102,6 +103,7 @@ Rectangle {
             }
         }
         FlatButton {
+            visible: player.width > 780
             text: backend.voice
             hint: qsTr("Choose voice (V)")
             font.pixelSize: 11

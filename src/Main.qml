@@ -33,6 +33,8 @@ ApplicationWindow {
     property bool readerReady: false
     property bool following: true
     readonly property bool controlFocused: activeFocusItem && (activeFocusItem instanceof AbstractButton || activeFocusItem instanceof Slider || activeFocusItem instanceof TextInput || activeFocusItem instanceof ComboBox)
+    readonly property bool narrow: width < 900
+    readonly property bool rtl: Qt.application.layoutDirection === Qt.RightToLeft
     property bool modalOpen: addDialog.visible || voiceDialog.visible || settingsDialog.visible || helpOpen
         || sidebar.popupOpen || actionsMenu.visible || playerBar.popupOpen
 
@@ -212,29 +214,26 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        Item {
+            id: workspace
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
-
-            SidebarPanel {
-                id: sidebar
-                visible: !win.focusMode
-                Layout.fillHeight: true
-                Layout.preferredWidth: visible ? Math.min(310, Math.round(win.width * 0.4)) : 0
-                onAddPage: addDialog.open()
-            }
+            readonly property bool queueDocked: !win.focusMode && !win.narrow
+            readonly property int queueWidth: win.narrow ? Math.min(330, Math.round(win.width * 0.88)) : 300
 
             Rectangle {
-                visible: !win.focusMode
-                Layout.fillHeight: true
-                Layout.preferredWidth: 1
-                color: theme.border
+                anchors.fill: parent
+                visible: !win.focusMode && win.narrow
+                color: "#66000000"
+                z: 1
+                MouseArea { anchors.fill: parent; onClicked: win.focusMode = true }
             }
 
             Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                id: readerArea
+                anchors.fill: parent
+                anchors.leftMargin: workspace.queueDocked && !win.rtl ? workspace.queueWidth + 1 : 0
+                anchors.rightMargin: workspace.queueDocked && win.rtl ? workspace.queueWidth + 1 : 0
 
                 WebEngineView {
                     id: readerView
@@ -313,20 +312,31 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignHCenter
-                            text: qsTr("Add a page to your queue. Space starts reading aloud.")
+                            text: backend.queue.length > 0
+                                ? qsTr("Choose a page from your queue, or add another.")
+                                : qsTr("Add a page to your queue. Space starts reading aloud.")
                             color: theme.muted
                             font.pixelSize: 14
                             wrapMode: Text.WordWrap
                             horizontalAlignment: Text.AlignHCenter
                         }
 
-                        FlatButton {
+                        RowLayout {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.topMargin: 10
-                            text: qsTr("Add a page")
-                            primary: true
-                            enabled: !backend.busy
-                            onClicked: addDialog.open()
+                            spacing: 8
+                            FlatButton {
+                                visible: backend.queue.length > 0
+                                text: qsTr("Open queue")
+                                hint: qsTr("Show the queue (F)")
+                                onClicked: win.focusMode = false
+                            }
+                            FlatButton {
+                                text: qsTr("Add a page")
+                                primary: true
+                                enabled: !backend.busy
+                                onClicked: addDialog.open()
+                            }
                         }
                     }
                 }
@@ -375,6 +385,32 @@ ApplicationWindow {
                         font.pixelSize: 13
                     }
                 }
+            }
+
+            Rectangle {
+                id: queueDivider
+                visible: workspace.queueDocked
+                width: 1
+                color: theme.border
+                z: 2
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.left: win.rtl ? undefined : parent.left
+                anchors.right: win.rtl ? parent.right : undefined
+                anchors.leftMargin: win.rtl ? 0 : workspace.queueWidth
+                anchors.rightMargin: win.rtl ? workspace.queueWidth : 0
+            }
+
+            SidebarPanel {
+                id: sidebar
+                visible: !win.focusMode
+                width: workspace.queueWidth
+                z: 2
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.left: win.rtl ? undefined : parent.left
+                anchors.right: win.rtl ? parent.right : undefined
+                onAddPage: addDialog.open()
             }
         }
 
