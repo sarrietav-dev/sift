@@ -91,6 +91,15 @@ private slots:
         backend.openArticle(id, false);
         QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 2, 5000);
 
+        // A new session reopens the last article, paused.
+        {
+            Backend restored(&theme);
+            QCOMPARE(restored.hasArticle(), false);
+            restored.restoreLastArticle();
+            QCOMPARE(restored.currentArticle().value("id").toString(), id);
+            QCOMPARE(restored.playing(), false);
+        }
+
         backend.seekSentence(1);
         QCOMPARE(backend.currentSentence(), 1);
         QCOMPARE(backend.playing(), false);

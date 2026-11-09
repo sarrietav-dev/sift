@@ -341,6 +341,8 @@ int runGui(const Cli &cli, int argc, char **argv) {
         });
     } else if (wantsOpen && !cli.target.isEmpty()) {
         QTimer::singleShot(0, &backend, [&] { backend.openUrl(cli.target, true); });
+    } else {
+        backend.restoreLastArticle();
     }
 
     return app.exec();

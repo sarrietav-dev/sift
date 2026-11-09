@@ -88,6 +88,8 @@ public:
     Q_INVOKABLE void addUrl(const QString &url);
     Q_INVOKABLE void openUrl(const QString &url, bool autoplay = true);
     Q_INVOKABLE void openArticle(const QString &id, bool autoplay = false);
+    // Reopens the article that was open when sift last closed, paused.
+    void restoreLastArticle();
     Q_INVOKABLE QString readerShell() const;
     Q_INVOKABLE void sentencesReady(int token, const QVariantList &sentences);
     Q_INVOKABLE void handleReaderUrl(const QString &url);

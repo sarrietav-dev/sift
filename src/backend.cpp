@@ -233,6 +233,7 @@ void Backend::openArticle(const QString &id, bool autoplay) {
     m_tts->stop();
     m_fromQueue = false;
     m_currentId = id;
+    m_library->setSetting("last_article", id);
     m_current = article;
     m_startSentence = readState == 2 ? 0 : article.value("lastSentence").toInt();
     m_autoplayAfterWrap = autoplay;
@@ -252,6 +253,27 @@ void Backend::openArticle(const QString &id, bool autoplay) {
     }
     emit readerRender(payload);
     setStatus(tr("Ready"));
+}
+
+void Backend::restoreLastArticle() {
+    if (hasArticle())
+        return;
+    const QString id = m_library->setting("last_article");
+    if (id.isEmpty())
+        return;
+    const QVariantMap article = m_library->article(id);
+    if (article.isEmpty() || !article.value("hasContent").toBool())
+        return;
+    openArticle(id, false);
+    // Starting from a queued article should keep advancing through the queue.
+    const QVariantList currentQueue = m_library->queue();
+    for (int i = 0; i < currentQueue.size(); ++i) {
+        if (currentQueue.at(i).toMap().value("id").toString() == id) {
+            m_queueIndex = i;
+            m_fromQueue = true;
+            break;
+        }
+    }
 }
 
 QStringList Backend::sentenceTexts(const QVariantList &sentences, QList<int> *blocks) {

@@ -16,6 +16,7 @@ sentence with a local Kokoro voice.
   at `http://127.0.0.1:8880`, with sentence highlighting, prefetch, and a voice
   and speed picker.
 - Keeps a single reading queue that advances automatically.
+- Reopens the article you were reading, where you left off.
 - Follows the Omarchy theme, light/dark mode, window rounding, and language.
 - Lets you choose any installed font and text size for the reading view.
 
