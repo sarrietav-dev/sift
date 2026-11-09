@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -106,6 +107,43 @@ private slots:
         window->resize(560, 520);
         QTest::keyClick(window, Qt::Key_F);
         QTRY_COMPARE(window->property("focusMode").toBool(), false);
+
+        // Shift+J and Shift+K move the selected page through the queue.
+        {
+            Library library;
+            QVERIFY(library.addToQueue(secondId));
+        }
+        backend.refresh();
+        QCOMPARE(backend.queue().size(), 2);
+        QObject *queueList = window->findChild<QObject *>("queueList");
+        QVERIFY(queueList);
+        QTRY_COMPARE(queueList->property("count").toInt(), 2);
+        queueList->setProperty("currentIndex", 0);
+        QTest::keyClick(window, Qt::Key_J, Qt::ShiftModifier);
+        QTRY_COMPARE(backend.queue().at(1).toMap().value("id").toString(), id);
+        QCOMPARE(queueList->property("currentIndex").toInt(), 1);
+        QTest::keyClick(window, Qt::Key_K, Qt::ShiftModifier);
+        QTRY_COMPARE(backend.queue().at(0).toMap().value("id").toString(), id);
+
+        // Dragging the first row's grip below the second reorders the queue.
+        {
+            auto *list = qobject_cast<QQuickItem *>(queueList);
+            QVERIFY(list);
+            const QPointF origin = list->mapToScene(QPointF(26, 32));
+            QPoint at = origin.toPoint();
+            QTest::mouseMove(window, at);
+            QTest::qWait(50);
+            QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, at);
+            for (int step = 0; step < 12; ++step) {
+                at.ry() += 7;
+                QTest::mouseMove(window, at);
+                QTest::qWait(16);
+            }
+            if (qEnvironmentVariableIsSet("SIFT_GUI_DRAG_SCREENSHOT"))
+                QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_DRAG_SCREENSHOT")));
+            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, at);
+            QTRY_COMPARE(backend.queue().at(1).toMap().value("id").toString(), id);
+        }
         QTest::qWait(200);
         if (qEnvironmentVariableIsSet("SIFT_GUI_QUEUE_SCREENSHOT"))
             QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_QUEUE_SCREENSHOT")));

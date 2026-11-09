@@ -65,6 +65,8 @@ Rectangle {
                     { key: "V", action: qsTr("Choose a voice") },
                     { key: "A", action: qsTr("Add a page") },
                     { key: "J / K", action: qsTr("Move in the queue, or scroll the article") },
+                    { key: "Shift+J / K", action: qsTr("Move the selected page down or up") },
+                    { key: "Del", action: qsTr("Remove the selected page from the queue") },
                     { key: "Enter", action: qsTr("Open the selected page") },
                     { key: "E", action: qsTr("Copy the Markdown export") },
                     { key: "F / Esc", action: qsTr("Show or hide the queue") },

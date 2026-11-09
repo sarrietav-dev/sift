@@ -101,6 +101,9 @@ ApplicationWindow {
         sequence: "K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen
         onActivated: win.focusMode ? readerView.runJavaScript("siftManualScroll(-140)") : sidebar.moveSelection(-1)
     }
+    Shortcut { sequence: "Shift+J"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.moveSelected(1) }
+    Shortcut { sequence: "Shift+K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.moveSelected(-1) }
+    Shortcut { sequence: "Delete"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode && !win.controlFocused; onActivated: sidebar.removeSelected() }
     Shortcut { sequence: "Return"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.activateSelection() }
     Shortcut { sequence: "PageDown"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("siftManualScroll(window.innerHeight * 0.85)") }
     Shortcut { sequence: "PageUp"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("siftManualScroll(-window.innerHeight * 0.85)") }

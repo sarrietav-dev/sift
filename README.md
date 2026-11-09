@@ -72,6 +72,8 @@ app refreshes itself after any of these.
 | `V` | Voice picker |
 | `A` | Add a page |
 | `J` / `K` | Move in the queue, or scroll the article when the queue is hidden |
+| `Shift+J` / `Shift+K` | Move the selected queue item down / up |
+| `Delete` | Remove the selected queue item from the queue |
 | `Enter` | Open the selected queue item |
 | `E` | Copy the Markdown export |
 | `F` | Show / hide the queue |
@@ -79,8 +81,9 @@ app refreshes itself after any of these.
 | `?` | All shortcuts |
 | `Q` | Quit |
 
-The queue can be reordered or cleared from its menus; removing an item does not
-delete its saved files. Clicking any sentence starts reading from there. Manually
+Drag a queue item by its grip (the position number turns into one on hover) to
+reorder it, or use its menu to play it next or send it to the top or bottom.
+Removing an item does not delete its saved files. Clicking any sentence starts reading from there. Manually
 scrolling suspends following; choose **Return to playback** to resume it.
 `Alt+click` on a link opens
 it as a new sift article; a normal click opens it in your browser.
