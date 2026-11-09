@@ -150,7 +150,7 @@
     for (var i = 0; i < found.length; i++) {
         var item = found[i];
         item.element.setAttribute('data-sift', String(i));
-        sentences.push({ i: i, text: item.text });
+        sentences.push({ i: i, text: item.text, block: item.block });
     }
     window.__siftSentences = sentences;
     window.__siftWrapped = true;

@@ -230,18 +230,16 @@ void Backend::openArticle(const QString &id, bool autoplay) {
     setStatus(tr("Ready"));
 }
 
-QStringList Backend::sentenceTexts(const QVariantList &sentences) {
+QStringList Backend::sentenceTexts(const QVariantList &sentences, QList<int> *blocks) {
     QStringList texts;
     for (const QVariant &entry : sentences) {
-        if (entry.canConvert<QVariantMap>()) {
-            const QString text = entry.toMap().value("text").toString().trimmed();
-            if (!text.isEmpty())
-                texts << text;
-        } else {
-            const QString text = entry.toString().trimmed();
-            if (!text.isEmpty())
-                texts << text;
-        }
+        const QVariantMap map = entry.canConvert<QVariantMap>() ? entry.toMap() : QVariantMap();
+        const QString text = (map.isEmpty() ? entry.toString() : map.value("text").toString()).trimmed();
+        if (text.isEmpty())
+            continue;
+        texts << text;
+        if (blocks)
+            blocks->append(map.value("block", -1).toInt());
     }
     return texts;
 }
@@ -250,12 +248,13 @@ void Backend::sentencesReady(const QVariantList &sentences) {
     if (!m_wrapping)
         return;
     m_wrapping = false;
-    const QStringList texts = sentenceTexts(sentences);
+    QList<int> blocks;
+    const QStringList texts = sentenceTexts(sentences, &blocks);
     if (texts.isEmpty()) {
         setError(tr("That page has no readable sentences."));
         return;
     }
-    m_tts->setSentences(texts, m_startSentence);
+    m_tts->setSentences(texts, blocks, m_startSentence);
     if (m_autoplayAfterWrap) {
         m_autoplayAfterWrap = false;
         m_tts->play();

@@ -90,14 +90,17 @@ QString TtsEngine::cachePath(const QString &text) const {
     return directory + "/" + hash + ".mp3";
 }
 
-void TtsEngine::setSentences(const QStringList &sentences, int startSentence) {
+void TtsEngine::setSentences(const QStringList &sentences, const QList<int> &blocks, int startSentence) {
     ++m_generation;
     m_player->stop();
     m_sentences.clear();
-    for (const QString &sentence : sentences) {
-        const QString clean = cleanForSpeech(sentence);
-        if (!clean.isEmpty())
-            m_sentences << clean;
+    m_blocks.clear();
+    for (int i = 0; i < sentences.size(); ++i) {
+        const QString clean = cleanForSpeech(sentences.at(i));
+        if (clean.isEmpty())
+            continue;
+        m_sentences << clean;
+        m_blocks << blocks.value(i, -1);
     }
     m_ready.clear();
     m_pending.clear();
@@ -211,8 +214,10 @@ void TtsEngine::next() {
     ++m_current;
     emit currentChanged();
     emit sentenceChanged(m_current);
-    if (m_playing)
+    if (m_playing) {
         playCurrentIfReady();
+        prefetch();
+    }
 }
 
 void TtsEngine::previous() {
@@ -228,8 +233,10 @@ void TtsEngine::previous() {
     --m_current;
     emit currentChanged();
     emit sentenceChanged(m_current);
-    if (m_playing)
+    if (m_playing) {
         playCurrentIfReady();
+        prefetch();
+    }
 }
 
 void TtsEngine::playFrom(int index) {
@@ -307,11 +314,15 @@ void TtsEngine::ensureAudio(int index) {
     });
 }
 
+// Keep the rest of the current paragraph and the whole next paragraph ready.
+// Sentence-only prefetching left an audible gap whenever playback crossed a
+// paragraph boundary, because the request for its first sentence only started
+// once the previous sentence had finished.
 void TtsEngine::prefetch() {
     if (m_sentences.isEmpty())
         return;
-    for (int i = m_current + 1; i <= m_current + 2 && i < m_sentences.size(); ++i)
-        ensureAudio(i);
+    for (int index : prefetchIndices(m_blocks, m_current))
+        ensureAudio(index);
 }
 
 void TtsEngine::pruneCache() {

@@ -104,8 +104,9 @@ URL → hidden Qt WebEngine → Defuddle → HTML + Markdown + metadata
 ```
 
 `Intl.Segmenter` splits the rendered article into sentences inside the reader;
-the C++ engine prefetches the next two through Kokoro and caches each MP3 by
-voice, speed, and text. Code blocks and tables are skipped when speaking.
+the C++ engine preloads the rest of the current paragraph and the whole next
+paragraph through Kokoro, then caches each MP3 by voice, speed, and text. Code
+blocks and tables are skipped when speaking.
 
 ## Limitations
 

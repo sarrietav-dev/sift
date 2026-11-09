@@ -178,7 +178,7 @@ private:
     QString buildReaderHtml(const QVariantMap &article) const;
     static QString sanitizeHtml(const QString &html);
     static QString readerDirection(const QString &language);
-    static QStringList sentenceTexts(const QVariantList &sentences);
+    static QStringList sentenceTexts(const QVariantList &sentences, QList<int> *blocks = nullptr);
 
     Theme *m_theme = nullptr;
     Library *m_library = nullptr;

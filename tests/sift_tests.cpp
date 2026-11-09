@@ -7,6 +7,7 @@
 #include "library.h"
 #include "theme.h"
 #include "translator.h"
+#include "ttsengine.h"
 
 namespace {
 void writeFile(const QString &path, const QByteArray &contents) {
@@ -142,6 +143,18 @@ private slots:
         QCOMPARE(article.value("readState").toInt(), 1);
         QCOMPARE(article.value("lastSentence").toInt(), 7);
         QCOMPARE(article.value("tags").toStringList(), QStringList({"research", "systems"}));
+    }
+
+    void prefetchReadsThroughTheNextParagraph() {
+        const QList<int> blocks{0, 0, 0, 1, 1, 1, 1, 2, 2, 2};
+        // From the start of paragraph 0: finish it and read all of paragraph 1.
+        QCOMPARE(TtsEngine::prefetchIndices(blocks, 0), QList<int>({1, 2, 3, 4, 5, 6}));
+        // From inside paragraph 1: finish it, then the whole of paragraph 2.
+        QCOMPARE(TtsEngine::prefetchIndices(blocks, 3), QList<int>({4, 5, 6, 7, 8, 9}));
+        // From the last sentence of paragraph 1: only paragraph 2 follows.
+        QCOMPARE(TtsEngine::prefetchIndices(blocks, 6), QList<int>({7, 8, 9}));
+        // Without paragraph information, fall back to a short sliding window.
+        QCOMPARE(TtsEngine::prefetchIndices(QList<int>(10, -1), 0).size(), 8);
     }
 
     void libraryPlaylistsAndQueue() {

@@ -33,7 +33,34 @@ public:
     double speed() const { return m_speed; }
     QString status() const { return m_status; }
 
-    void setSentences(const QStringList &sentences, int startSentence = 0);
+    // Sentence indices to preload: the rest of this paragraph, then the whole
+    // next one. Kept here so the window can be tested without a server.
+    static QList<int> prefetchIndices(const QList<int> &blocks, int current) {
+        QList<int> indices;
+        if (current < 0 || current >= blocks.size())
+            return indices;
+        const int currentBlock = blocks.at(current);
+        if (currentBlock < 0) {
+            for (int i = current + 1; i <= current + 8 && i < blocks.size(); ++i)
+                indices << i;
+            return indices;
+        }
+        int targetBlock = currentBlock;
+        bool nextParagraph = false;
+        for (int i = current + 1; i < blocks.size() && i - current <= 48; ++i) {
+            const int block = blocks.at(i);
+            if (block >= 0 && block != targetBlock) {
+                if (nextParagraph)
+                    break;
+                nextParagraph = true;
+                targetBlock = block;
+            }
+            indices << i;
+        }
+        return indices;
+    }
+
+    void setSentences(const QStringList &sentences, const QList<int> &blocks = {}, int startSentence = 0);
     void setStartSentence(int index);
     void setVoice(const QString &voice);
     void setSpeed(double speed);
@@ -76,6 +103,7 @@ private:
     QMediaPlayer *m_player = nullptr;
     QAudioOutput *m_audio = nullptr;
     QStringList m_sentences;
+    QList<int> m_blocks;
     QSet<int> m_ready;
     QSet<int> m_pending;
     QHash<int, QString> m_errors;
