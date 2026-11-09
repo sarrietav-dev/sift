@@ -33,9 +33,6 @@ namespace {
 struct Cli {
     QString command = "gui";
     QString target;
-    QStringList tags;
-    QString playlist;
-    QString tag;
     QString filter;
     bool json = false;
     bool help = false;
@@ -77,12 +74,6 @@ Cli parseCli(int argc, char *argv[]) {
         const QString arg = args.at(i);
         if (arg == "--json")
             cli.json = true;
-        else if (arg == "--tags" && i + 1 < args.size())
-            cli.tags = args.at(++i).split(',', Qt::SkipEmptyParts);
-        else if (arg == "--playlist" && i + 1 < args.size())
-            cli.playlist = args.at(++i);
-        else if (arg == "--tag" && i + 1 < args.size())
-            cli.tag = args.at(++i);
         else if (arg == "--unread")
             cli.filter = "unread";
         else if (arg == "--reading")
@@ -103,8 +94,8 @@ QString usage() {
         "Usage:\n"
         "  sift                              open the app\n"
         "  sift <url>                        open a page\n"
-        "  sift add <url> [--tags a,b] [--playlist name] [--json]\n"
-        "  sift list [--unread|--reading|--read] [--tag name] [--json]\n"
+        "  sift add <url> [--json]\n"
+        "  sift list [--unread|--reading|--read] [--json]\n"
         "  sift export <id|url>              Markdown to stdout\n"
         "  sift play <id|url>                open and start reading\n"
         "  sift queue add <id|url>           append to the queue\n\n"
@@ -151,7 +142,7 @@ int runList(const Cli &cli, int argc, char **argv) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
     Library library;
-    const QVariantList articles = library.articles(cli.filter.isEmpty() ? "all" : cli.filter, cli.tag);
+    const QVariantList articles = library.articles(cli.filter.isEmpty() ? "all" : cli.filter);
     if (cli.json) {
         QJsonArray array;
         for (const QVariant &entry : articles) {
@@ -164,10 +155,6 @@ int runList(const Cli &cli, int argc, char **argv) {
             object["readState"] = article.value("readState").toInt();
             object["lastSentence"] = article.value("lastSentence").toInt();
             object["wordCount"] = article.value("wordCount").toInt();
-            QJsonArray tags;
-            for (const QString &tag : article.value("tags").toStringList())
-                tags.append(tag);
-            object["tags"] = tags;
             array.append(object);
         }
         QTextStream(stdout) << QJsonDocument(array).toJson(QJsonDocument::Indented);
@@ -241,21 +228,6 @@ int runAdd(const Cli &cli, int argc, char **argv) {
             exitCode = 1;
             loop.quit();
             return;
-        }
-        if (!cli.tags.isEmpty())
-            library.setTags(id, cli.tags);
-        if (!cli.playlist.isEmpty()) {
-            QString playlistId;
-            for (const QVariant &entry : library.playlists()) {
-                if (entry.toMap().value("name").toString() == cli.playlist) {
-                    playlistId = entry.toMap().value("id").toString();
-                    break;
-                }
-            }
-            if (playlistId.isEmpty())
-                playlistId = library.createPlaylist(cli.playlist);
-            if (!playlistId.isEmpty())
-                library.addToPlaylist(playlistId, id);
         }
         notifyRefresh();
         if (cli.json) {
