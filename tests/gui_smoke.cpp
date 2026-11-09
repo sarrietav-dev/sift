@@ -52,6 +52,10 @@ private slots:
         QVERIFY(html.contains("<h1 id=\"sift-title\">The Quiet Art of Reading</h1>"));
         QVERIFY(html.contains("By Example Author"));
         QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 0, 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(window->property("readerPainted").toBool(), 5000);
+        QObject *cover = window->findChild<QObject *>("readerCover");
+        QVERIFY(cover);
+        QTRY_VERIFY(!cover->property("visible").toBool());
         QCOMPARE(backend.queue().size(), 1);
         QCOMPARE(backend.currentArticle().value("id").toString(), id);
         QCOMPARE(backend.playing(), false);

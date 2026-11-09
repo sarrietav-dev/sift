@@ -28,6 +28,7 @@ ApplicationWindow {
     property bool focusMode: true
     property string toastText: ""
     property bool readerReady: false
+    property bool readerPainted: false
     property bool following: true
     readonly property bool controlFocused: activeFocusItem && (activeFocusItem instanceof AbstractButton || activeFocusItem instanceof Slider || activeFocusItem instanceof TextInput || activeFocusItem instanceof ComboBox)
     readonly property bool narrow: width < 900
@@ -245,6 +246,7 @@ ApplicationWindow {
                         if (request.status === WebEngineView.LoadSucceededStatus) {
                             win.readerReady = true
                             wrapTimer.restart()
+                            paintTimer.restart()
                         } else if (request.status === WebEngineView.LoadFailedStatus) {
                             win.readerReady = false
                             backend.sentencesReady([])
@@ -264,6 +266,16 @@ ApplicationWindow {
                             backend.openExternal(target)
                         }
                     }
+                }
+
+                // WebEngine paints its surface black until the first frame of
+                // the loaded page arrives. Hold the window colour over it so
+                // opening an article does not flash black.
+                Rectangle {
+                    objectName: "readerCover"
+                    anchors.fill: parent
+                    visible: backend.hasArticle && !win.readerPainted
+                    color: theme.background
                 }
 
                 FlatButton {
@@ -437,6 +449,16 @@ ApplicationWindow {
         }
     }
 
+    // LoadSucceeded precedes the first painted frame by a moment. Keep the
+    // window-coloured cover up a little longer so the black surface never
+    // shows between the two.
+    Timer {
+        id: paintTimer
+        interval: 500
+        repeat: false
+        onTriggered: win.readerPainted = true
+    }
+
     Timer {
         id: toastTimer
         interval: 2800
@@ -448,6 +470,7 @@ ApplicationWindow {
         target: backend
         function onReaderLoad(html, baseUrl) {
             win.readerReady = false
+            win.readerPainted = false
             win.following = true
             readerView.loadHtml(html, baseUrl)
         }
