@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtWebEngine
 
@@ -8,23 +7,12 @@ ApplicationWindow {
     id: win
     width: 1180
     height: 780
-    minimumWidth: 780
+    minimumWidth: 560
     minimumHeight: 520
     visible: true
     title: backend.hasArticle ? backend.currentArticle.title + " — sift" : "sift"
     color: theme.background
 
-    Material.theme: theme.dark ? Material.Dark : Material.Light
-    Material.accent: theme.accent
-    Material.primary: theme.accent
-    Material.background: theme.background
-    Material.foreground: theme.foreground
-    Material.roundedScale: theme.radius <= 0 ? Material.NotRounded
-        : theme.radius <= 3 ? Material.ExtraSmallScale
-        : theme.radius <= 7 ? Material.SmallScale
-        : theme.radius <= 11 ? Material.MediumScale
-        : theme.radius <= 16 ? Material.LargeScale
-        : Material.ExtraLargeScale
     font.family: theme.uiFont
     palette.window: theme.background
     palette.base: theme.background
@@ -78,7 +66,7 @@ ApplicationWindow {
     Shortcut { sequence: "+"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
     Shortcut { sequence: "="; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
     Shortcut { sequence: "V"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: voiceDialog.open() }
-    Shortcut { sequence: "A"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: addDialog.open() }
+    Shortcut { sequence: "A"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !backend.busy; onActivated: addDialog.open() }
     Shortcut { sequence: "E"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.copyMarkdown() }
     Shortcut { sequence: "F"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: win.focusMode = !win.focusMode }
     Shortcut { sequence: "Ctrl+,"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: settingsDialog.open() }
@@ -130,6 +118,7 @@ ApplicationWindow {
                 FlatButton {
                     text: qsTr("+ Add page")
                     hint: qsTr("Add a page (A)")
+                    enabled: !backend.busy
                     font.pixelSize: 13
                     onClicked: addDialog.open()
                 }
@@ -193,9 +182,10 @@ ApplicationWindow {
                     elide: Text.ElideRight
                 }
 
-                ToolButton {
+                FlatButton {
                     text: "×"
                     font.pixelSize: 17
+                    hint: qsTr("Dismiss error")
                     onClicked: backend.clearError()
                 }
             }
@@ -231,7 +221,7 @@ ApplicationWindow {
                 id: sidebar
                 visible: !win.focusMode
                 Layout.fillHeight: true
-                Layout.preferredWidth: visible ? 326 : 0
+                Layout.preferredWidth: visible ? Math.min(310, Math.round(win.width * 0.4)) : 0
                 onAddPage: addDialog.open()
             }
 
@@ -330,11 +320,12 @@ ApplicationWindow {
                             horizontalAlignment: Text.AlignHCenter
                         }
 
-                        Button {
+                        FlatButton {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.topMargin: 10
                             text: qsTr("Add a page")
-                            highlighted: true
+                            primary: true
+                            enabled: !backend.busy
                             onClicked: addDialog.open()
                         }
                     }
@@ -352,7 +343,6 @@ ApplicationWindow {
                         BusyIndicator {
                             Layout.alignment: Qt.AlignHCenter
                             running: backend.busy
-                            Material.accent: theme.accent
                         }
 
                         Label {
@@ -455,14 +445,17 @@ ApplicationWindow {
 
     AddPageDialog {
         id: addDialog
+        objectName: "addDialog"
     }
 
     VoicePickerDialog {
         id: voiceDialog
+        objectName: "voiceDialog"
     }
 
     SettingsDialog {
         id: settingsDialog
+        objectName: "settingsDialog"
     }
 
     ShortcutsOverlay {

@@ -34,7 +34,7 @@ Rectangle {
             Label { text: qsTr("Queue"); color: theme.foreground; font.pixelSize: 15; font.weight: Font.DemiBold }
             Label { text: backend.queue.length; color: theme.muted; font.family: theme.monoFont; font.pixelSize: 11 }
             Item { Layout.fillWidth: true }
-            FlatButton { text: "+"; font.pixelSize: 19; hint: qsTr("Add a page (A)"); onClicked: sidebar.addPage() }
+            FlatButton { text: "+"; font.pixelSize: 19; hint: qsTr("Add a page (A)"); enabled: !backend.busy; onClicked: sidebar.addPage() }
             FlatButton { text: "⋯"; font.pixelSize: 19; hint: qsTr("Queue actions"); enabled: backend.queue.length > 0; onClicked: queueMenu.open()
                 Menu {
                     id: queueMenu
@@ -102,18 +102,19 @@ Rectangle {
                 visible: queueList.count === 0
                 Label { width: parent.width; text: qsTr("Your queue is empty"); color: theme.foreground; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter }
                 Label { width: parent.width; text: qsTr("Add a page to read or listen."); color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter }
-                FlatButton { anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("+ Add page"); onClicked: sidebar.addPage() }
+                FlatButton { anchors.horizontalCenter: parent.horizontalCenter; text: qsTr("+ Add page"); enabled: !backend.busy; onClicked: sidebar.addPage() }
             }
         }
     }
-    Dialog {
+    SiftDialog {
         id: clearDialog
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
         title: qsTr("Clear the queue?")
-        standardButtons: Dialog.Cancel | Dialog.Ok
         Label { text: qsTr("Saved article files will not be deleted."); color: theme.foreground }
-        onAccepted: backend.clearQueue()
+        footer: RowLayout {
+            Item { Layout.fillWidth: true }
+            FlatButton { text: qsTr("Cancel"); onClicked: clearDialog.close() }
+            FlatButton { text: qsTr("Clear queue"); primary: true; onClicked: { backend.clearQueue(); clearDialog.close() } }
+            Item { Layout.preferredWidth: 16 }
+        }
     }
 }

@@ -2,14 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Dialog {
+SiftDialog {
     id: dialog
-    x: parent ? Math.round((parent.width - width) / 2) : 0
-    y: parent ? Math.round((parent.height - height) / 2) : 0
     title: qsTr("Add a page")
-    modal: true
-    width: 560
-    closePolicy: Popup.CloseOnEscape
     standardButtons: Dialog.NoButton
 
     function submit() {
@@ -36,10 +31,11 @@ Dialog {
             wrapMode: Text.WordWrap
         }
 
-        TextField {
+        SiftField {
             id: urlField
             Layout.fillWidth: true
             placeholderText: "https://"
+            Accessible.name: qsTr("Page address")
             font.pixelSize: 14
             selectByMouse: true
             onAccepted: dialog.submit()
@@ -52,15 +48,14 @@ Dialog {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            FlatButton {
                 text: qsTr("Cancel")
-                flat: true
                 onClicked: dialog.close()
             }
 
-            Button {
+            FlatButton {
                 text: qsTr("Add")
-                highlighted: true
+                primary: true
                 enabled: urlField.text.trim() !== ""
                 onClicked: dialog.submit()
             }

@@ -2,16 +2,11 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Dialog {
+SiftDialog {
     id: dialog
-    x: parent ? Math.round((parent.width - width) / 2) : 0
-    y: parent ? Math.round((parent.height - height) / 2) : 0
     title: qsTr("Voice")
-    modal: true
-    width: 760
-    height: 600
-    closePolicy: Popup.CloseOnEscape
-    standardButtons: Dialog.Close
+    width: Math.min(560, parent ? parent.width - 32 : 560)
+    height: Math.min(570, parent ? parent.height - 32 : 570)
 
     property var filtered: []
 
@@ -39,18 +34,20 @@ Dialog {
             Layout.fillWidth: true
             spacing: 8
 
-            TextField {
+            SiftField {
                 id: searchField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Search voices by name, language, or gender")
+                Accessible.name: qsTr("Search voices")
                 font.pixelSize: 13
                 selectByMouse: true
                 onTextChanged: dialog.refresh()
+                Keys.onDownPressed: if (voiceList.count) { voiceList.currentIndex = 0; voiceList.forceActiveFocus() }
+                onAccepted: if (dialog.filtered.length) { backend.setVoice(dialog.filtered[0].id); dialog.close() }
             }
 
-            Button {
+            FlatButton {
                 text: qsTr("Refresh")
-                flat: true
                 font.pixelSize: 11
                 onClicked: backend.refreshVoices()
             }
@@ -83,15 +80,19 @@ Dialog {
             clip: true
             spacing: 2
             model: dialog.filtered
+            currentIndex: 0
+            Keys.onReturnPressed: if (currentIndex >= 0 && currentIndex < dialog.filtered.length) { backend.setVoice(dialog.filtered[currentIndex].id); dialog.close() }
+            Keys.onEnterPressed: if (currentIndex >= 0 && currentIndex < dialog.filtered.length) { backend.setVoice(dialog.filtered[currentIndex].id); dialog.close() }
             ScrollBar.vertical: ScrollBar { }
 
             delegate: Rectangle {
                 required property var modelData
+                required property int index
 
                 width: ListView.view.width
                 height: 48
                 radius: Math.min(5, theme.radius)
-                color: backend.voice === modelData.id ? theme.panel : "transparent"
+                color: backend.voice === modelData.id || (voiceList.activeFocus && voiceList.currentIndex === index) ? theme.panel : "transparent"
 
                 MouseArea {
                     anchors.fill: parent
@@ -108,7 +109,7 @@ Dialog {
                     spacing: 10
 
                     Label {
-                        Layout.preferredWidth: 230
+                        Layout.fillWidth: true
                         text: modelData.id
                         color: backend.voice === modelData.id ? theme.accent : theme.foreground
                         font.pixelSize: 13
@@ -116,7 +117,8 @@ Dialog {
                     }
 
                     Label {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 120
+                        elide: Text.ElideRight
                         text: modelData.language
                         color: theme.muted
                         font.pixelSize: 11
@@ -138,6 +140,12 @@ Dialog {
                 font.pixelSize: 12
             }
         }
+    }
+
+    footer: RowLayout {
+        Item { Layout.fillWidth: true }
+        FlatButton { text: qsTr("Close"); onClicked: dialog.close() }
+        Item { Layout.preferredWidth: 16 }
     }
 
     Connections {
