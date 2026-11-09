@@ -4,6 +4,7 @@
         <file alias="SidebarPanel.qml">SidebarPanel.qml</file>
         <file alias="PlayerBar.qml">PlayerBar.qml</file>
         <file alias="FlatButton.qml">FlatButton.qml</file>
+        <file alias="SiftIcon.qml">SiftIcon.qml</file>
         <file alias="SiftDialog.qml">SiftDialog.qml</file>
         <file alias="SiftField.qml">SiftField.qml</file>
         <file alias="AddPageDialog.qml">AddPageDialog.qml</file>

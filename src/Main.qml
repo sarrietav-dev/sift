@@ -100,9 +100,8 @@ ApplicationWindow {
                 spacing: 10
 
                 FlatButton {
-                    text: "☰"
+                    iconPath: "M4 7h16 M4 12h16 M4 17h16"
                     hint: qsTr("Toggle queue (F)")
-                    font.pixelSize: 16
                     onClicked: win.focusMode = !win.focusMode
                 }
 
@@ -115,7 +114,8 @@ ApplicationWindow {
                 }
 
                 FlatButton {
-                    text: qsTr("+ Add page")
+                    iconPath: "M12 5v14 M5 12h14"
+                    text: qsTr("Add page")
                     hint: qsTr("Add a page (A)")
                     enabled: !backend.busy
                     font.pixelSize: 13
@@ -123,16 +123,14 @@ ApplicationWindow {
                 }
 
                 FlatButton {
-                    text: "?"
+                    iconPath: "M12 17h.01 M9.4 9a2.6 2.6 0 1 1 4.2 2.1c-.9.7-1.6 1.2-1.6 2.4 M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"
                     hint: qsTr("Keyboard shortcuts (?)")
-                    font.pixelSize: 13
                     onClicked: win.helpOpen = !win.helpOpen
                 }
 
                 FlatButton {
-                    text: "⋯"
+                    iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"
                     hint: qsTr("Article and settings menu")
-                    font.pixelSize: 20
                     onClicked: actionsMenu.open()
                     Menu {
                         id: actionsMenu

@@ -5,22 +5,39 @@ Button {
     id: control
     property string hint: ""
     property bool primary: false
+    property string iconPath: ""
+    property bool iconFilled: false
+    property real iconSize: 16
     implicitHeight: 34
-    implicitWidth: Math.max(34, label.implicitWidth + 20)
+    implicitWidth: Math.max(34, contentRow.implicitWidth + 20)
     padding: 0
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
     Accessible.name: hint !== "" ? hint : text
     ToolTip.visible: hovered && hint !== ""
     ToolTip.text: hint
-    contentItem: Text {
-        id: label
-        text: control.text
-        font: control.font
-        color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+    contentItem: Row {
+        id: contentRow
+        anchors.centerIn: parent
+        spacing: control.text !== "" && control.iconPath !== "" ? 7 : 0
+        SiftIcon {
+            visible: control.iconPath !== ""
+            path: control.iconPath
+            filled: control.iconFilled
+            size: control.iconSize
+            color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Text {
+            id: label
+            visible: control.text !== ""
+            text: control.text
+            font: control.font
+            color: control.enabled ? (control.primary ? theme.accentForeground : theme.foreground) : theme.muted
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
     background: Rectangle {
         radius: Math.min(theme.radius, 4)

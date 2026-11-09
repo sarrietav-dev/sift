@@ -18,22 +18,21 @@ Rectangle {
         spacing: 8
 
         FlatButton {
-            text: "‹"
-            font.pixelSize: 22
+            iconPath: "M15 5L8 12l7 7"
             hint: qsTr("Previous sentence ([)")
             enabled: backend.sentenceCount > 0
             onClicked: backend.previousSentence()
         }
         FlatButton {
-            text: backend.buffering ? "…" : backend.playing ? "Ⅱ" : "▶"
-            font.pixelSize: 17
+            text: backend.buffering ? "…" : ""
+            iconPath: backend.buffering ? "" : backend.playing ? "M8 5h3v14H8z M14 5h3v14h-3z" : "M8 5l11 7-11 7z"
+            iconFilled: true
             hint: backend.playing ? qsTr("Pause (Space)") : qsTr("Play (Space)")
             enabled: backend.sentenceCount > 0
             onClicked: backend.playPause()
         }
         FlatButton {
-            text: "›"
-            font.pixelSize: 22
+            iconPath: "M9 5l7 7-7 7"
             hint: qsTr("Next sentence (])")
             enabled: backend.sentenceCount > 0
             onClicked: backend.nextSentence()
@@ -42,7 +41,7 @@ Rectangle {
         Label {
             visible: player.width > 1000
             Layout.preferredWidth: 100
-            text: backend.buffering ? qsTr("Preparing…") : backend.playing ? qsTr("Listening") : qsTr("Paused")
+            text: backend.buffering ? qsTr("Preparing…") : backend.playing ? qsTr("Listening") : backend.ttsStatus
             color: theme.muted
             font.pixelSize: 12
             elide: Text.ElideRight

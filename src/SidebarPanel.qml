@@ -33,8 +33,8 @@ Rectangle {
             Label { text: qsTr("Queue"); color: theme.foreground; font.pixelSize: 15; font.weight: Font.DemiBold }
             Label { text: backend.queue.length; color: theme.muted; font.family: theme.monoFont; font.pixelSize: 11 }
             Item { Layout.fillWidth: true }
-            FlatButton { text: "+"; font.pixelSize: 19; hint: qsTr("Add a page (A)"); enabled: !backend.busy; onClicked: sidebar.addPage() }
-            FlatButton { text: "⋯"; font.pixelSize: 19; hint: qsTr("Queue actions"); enabled: backend.queue.length > 0; onClicked: queueMenu.open()
+            FlatButton { iconPath: "M12 5v14 M5 12h14"; hint: qsTr("Add a page (A)"); enabled: !backend.busy; onClicked: sidebar.addPage() }
+            FlatButton { iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"; hint: qsTr("Queue actions"); enabled: backend.queue.length > 0; onClicked: queueMenu.open()
                 Menu {
                     id: queueMenu
                     MenuItem { text: qsTr("Clear queue…"); onTriggered: clearDialog.open() }
@@ -80,7 +80,7 @@ Rectangle {
                         Label { Layout.fillWidth: true; text: row.modelData.domain || ""; color: theme.muted; font.pixelSize: 11; elide: Text.ElideRight }
                     }
                     FlatButton {
-                        text: "⋯"; font.pixelSize: 17; hint: qsTr("Queue item actions")
+                        iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"; hint: qsTr("Queue item actions")
                         onClicked: itemMenu.open()
                         Menu {
                             id: itemMenu
