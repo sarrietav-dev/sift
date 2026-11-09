@@ -32,7 +32,9 @@
 namespace {
 struct Cli {
     QString command = "gui";
+    QString subcommand;
     QString target;
+    QStringList positional;
     QString filter;
     bool json = false;
     bool help = false;
@@ -59,8 +61,12 @@ Cli parseCli(int argc, char *argv[]) {
     if (commands.contains(first)) {
         cli.command = first;
         args.removeFirst();
-        if (cli.command == "queue" && !args.isEmpty() && args.first() == "add")
-            args.removeFirst();
+        static const QStringList queueCommands{"add", "list", "remove", "move"};
+        if (cli.command == "queue") {
+            cli.subcommand = "list";
+            if (!args.isEmpty() && queueCommands.contains(args.first()))
+                cli.subcommand = args.takeFirst();
+        }
     } else if (first.startsWith("-")) {
         cli.help = true;
         return cli;
@@ -82,9 +88,11 @@ Cli parseCli(int argc, char *argv[]) {
             cli.filter = "read";
         else if (arg == "--help" || arg == "-h")
             cli.help = true;
-        else if (!arg.startsWith("-") && cli.target.isEmpty())
-            cli.target = arg;
+        else if (!arg.startsWith("-") || arg == "-")
+            cli.positional << arg;
     }
+    if (cli.target.isEmpty() && !cli.positional.isEmpty())
+        cli.target = cli.positional.first();
     return cli;
 }
 
@@ -98,7 +106,10 @@ QString usage() {
         "  sift list [--unread|--reading|--read] [--json]\n"
         "  sift export <id|url>              Markdown to stdout\n"
         "  sift play <id|url>                open and start reading\n"
-        "  sift queue add <id|url>           queue a saved page\n\n"
+        "  sift queue [--json]               list the queue\n"
+        "  sift queue add <url|id> [--json]  queue a page, fetching it if it is new\n"
+        "  sift queue remove <id|url|n>      take a page off the queue\n"
+        "  sift queue move <id|url|n> <n|top|bottom>\n\n"
         "The Kokoro endpoint is configured in sift's Settings.\n");
 }
 
@@ -185,13 +196,155 @@ int runExport(const Cli &cli, int argc, char **argv) {
     return 0;
 }
 
-int runQueueAdd(const Cli &cli, int argc, char **argv) {
+bool looksLikeUrl(const QString &target) {
+    return target.startsWith("http://") || target.startsWith("https://")
+        || (target.contains('.') && !target.contains(' '));
+}
+
+// Fetches a page in a hidden WebEngine page and saves it. Needs a
+// QGuiApplication on the offscreen platform.
+bool extractAndSave(Library &library, const QString &url, QString *id, QVariantMap *saved) {
+    Extractor extractor;
+    bool ok = false;
+    QEventLoop loop;
+    QObject::connect(&extractor, &Extractor::failed, &loop, [&](const QString &error) {
+        QTextStream(stderr) << "sift: " << error << '\n';
+        loop.quit();
+    });
+    QObject::connect(&extractor, &Extractor::finished, &loop, [&](const QVariantMap &article) {
+        QString error;
+        if (!library.saveArticle(article, id, &error)) {
+            QTextStream(stderr) << "sift: " << error << '\n';
+        } else {
+            if (saved)
+                *saved = article;
+            ok = true;
+        }
+        loop.quit();
+    });
+    QTimer::singleShot(60000, &loop, [&] {
+        QTextStream(stderr) << "sift: extraction timed out\n";
+        loop.quit();
+    });
+    QTimer::singleShot(0, &extractor, [&] { extractor.extract(url); });
+    loop.exec();
+    return ok;
+}
+
+// Accepts an article id, a saved URL, or a 1-based queue position.
+int queueIndexFor(Library &library, const QString &target) {
+    const QVariantList queue = library.queue();
+    bool numeric = false;
+    const int position = target.toInt(&numeric);
+    if (numeric && QString::number(position) == target)
+        return position >= 1 && position <= queue.size() ? position - 1 : -1;
+    const QString id = articleIdFor(library, target);
+    for (int i = 0; i < queue.size(); ++i) {
+        if (queue.at(i).toMap().value("id").toString() == id)
+            return i;
+    }
+    return -1;
+}
+
+void printQueue(Library &library, bool json) {
+    const QVariantList queue = library.queue();
+    if (json) {
+        QJsonArray array;
+        for (int i = 0; i < queue.size(); ++i) {
+            const QVariantMap article = queue.at(i).toMap();
+            QJsonObject object;
+            object["position"] = i + 1;
+            object["id"] = article.value("id").toString();
+            object["title"] = article.value("title").toString();
+            object["url"] = article.value("url").toString();
+            object["domain"] = article.value("domain").toString();
+            array.append(object);
+        }
+        QTextStream(stdout) << QJsonDocument(array).toJson(QJsonDocument::Indented);
+        return;
+    }
+    for (int i = 0; i < queue.size(); ++i) {
+        const QVariantMap article = queue.at(i).toMap();
+        QTextStream(stdout) << QString::number(i + 1).rightJustified(3) << "  "
+                            << article.value("title").toString() << "  "
+                            << article.value("domain").toString() << "  "
+                            << article.value("id").toString() << '\n';
+    }
+}
+
+int runQueue(const Cli &cli, int argc, char **argv) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
     Library library;
-    const QString id = articleIdFor(library, cli.target);
-    if (id.isEmpty() || !library.addToQueue(id)) {
-        QTextStream(stderr) << "sift: no article at " << cli.target << '\n';
+
+    if (cli.subcommand == "list") {
+        printQueue(library, cli.json);
+        return 0;
+    }
+    if (cli.target.isEmpty()) {
+        QTextStream(stderr) << usage();
+        return 1;
+    }
+    if (cli.subcommand == "remove") {
+        const int index = queueIndexFor(library, cli.target);
+        if (index < 0) {
+            QTextStream(stderr) << "sift: " << cli.target << " is not in the queue\n";
+            return 1;
+        }
+        library.removeFromQueue(library.queue().at(index).toMap().value("id").toString());
+        notifyRefresh();
+        return 0;
+    }
+    if (cli.subcommand == "move") {
+        const int from = queueIndexFor(library, cli.target);
+        const int count = library.queue().size();
+        if (from < 0) {
+            QTextStream(stderr) << "sift: " << cli.target << " is not in the queue\n";
+            return 1;
+        }
+        const QString where = cli.positional.value(1);
+        bool numeric = false;
+        int to = where.toInt(&numeric) - 1;
+        if (where == "top")
+            to = 0;
+        else if (where == "bottom")
+            to = count - 1;
+        else if (!numeric)
+            to = -1;
+        if (to < 0 || to >= count) {
+            QTextStream(stderr) << "sift: move to a position from 1 to " << count << ", top, or bottom\n";
+            return 1;
+        }
+        if (from != to)
+            library.moveQueueItem(from, to);
+        notifyRefresh();
+        return 0;
+    }
+    return 1;
+}
+
+// Queues a saved page, or fetches and saves a new URL first. Fetching needs
+// WebEngine, so this runs under a QGuiApplication on the offscreen platform.
+int runQueueAdd(const Cli &cli, int argc, char **argv) {
+    QtWebEngineQuick::initialize();
+    QGuiApplication app(argc, argv);
+    QCoreApplication::setApplicationName("sift");
+    Library library;
+
+    QString id = articleIdFor(library, cli.target);
+    QString title = library.article(id).value("title").toString();
+    if (library.article(id).isEmpty()) {
+        if (!looksLikeUrl(cli.target)) {
+            QTextStream(stderr) << "sift: no saved page with id " << cli.target << '\n';
+            return 1;
+        }
+        QVariantMap saved;
+        if (!extractAndSave(library, cli.target, &id, &saved))
+            return 1;
+        title = saved.value("title").toString();
+    }
+    if (!library.addToQueue(id)) {
+        QTextStream(stderr) << "sift: could not queue " << cli.target << '\n';
         return 1;
     }
     notifyRefresh();
@@ -199,7 +352,11 @@ int runQueueAdd(const Cli &cli, int argc, char **argv) {
         QJsonObject object;
         object["ok"] = true;
         object["id"] = id;
+        object["title"] = title;
+        object["position"] = queueIndexFor(library, id) + 1;
         QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
+    } else {
+        QTextStream(stdout) << title << '\n';
     }
     return 0;
 }
@@ -211,49 +368,23 @@ int runAdd(const Cli &cli, int argc, char **argv) {
     QCoreApplication::setApplicationVersion("0.1.0");
 
     Library library;
-    Extractor extractor;
-    int exitCode = 1;
-
-    QEventLoop loop;
-    QObject::connect(&extractor, &Extractor::failed, &loop, [&](const QString &error) {
-        QTextStream(stderr) << "sift: " << error << '\n';
-        exitCode = 1;
-        loop.quit();
-    });
-    QObject::connect(&extractor, &Extractor::finished, &loop, [&](const QVariantMap &article) {
-        QString id;
-        QString error;
-        if (!library.saveArticle(article, &id, &error)) {
-            QTextStream(stderr) << "sift: " << error << '\n';
-            exitCode = 1;
-            loop.quit();
-            return;
-        }
-        notifyRefresh();
-        if (cli.json) {
-            QJsonObject object;
-            object["ok"] = true;
-            object["id"] = id;
-            object["title"] = article.value("title").toString();
-            object["url"] = article.value("url").toString();
-            object["markdown"] = library.article(id).value("markdownPath").toString();
-            QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
-        } else {
-            QTextStream(stdout) << article.value("title").toString() << '\n';
-        }
-        exitCode = 0;
-        loop.quit();
-    });
-
-    QTimer::singleShot(60000, &loop, [&] {
-        QTextStream(stderr) << "sift: extraction timed out\n";
-        exitCode = 1;
-        loop.quit();
-    });
-
-    extractor.extract(cli.target);
-    loop.exec();
-    return exitCode;
+    QString id;
+    QVariantMap article;
+    if (!extractAndSave(library, cli.target, &id, &article))
+        return 1;
+    notifyRefresh();
+    if (cli.json) {
+        QJsonObject object;
+        object["ok"] = true;
+        object["id"] = id;
+        object["title"] = article.value("title").toString();
+        object["url"] = article.value("url").toString();
+        object["markdown"] = library.article(id).value("markdownPath").toString();
+        QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
+    } else {
+        QTextStream(stdout) << article.value("title").toString() << '\n';
+    }
+    return 0;
 }
 
 int runGui(const Cli &cli, int argc, char **argv) {
@@ -364,15 +495,22 @@ int main(int argc, char *argv[]) {
         return runList(cli, argc, argv);
     if (cli.command == "export")
         return runExport(cli, argc, argv);
-    if (cli.command == "queue")
-        return runQueueAdd(cli, argc, argv);
-    if (cli.command == "add") {
+    if (cli.command == "queue" && cli.subcommand != "add")
+        return runQueue(cli, argc, argv);
+    if (cli.command == "add" || cli.command == "queue") {
+        // Fetching pages needs WebEngine but no window.
         qputenv("QT_QPA_PLATFORM", "offscreen");
         QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
         if (!flags.contains("--disable-gpu"))
             flags += " --disable-gpu";
         qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
-        return runAdd(cli, argc, argv);
+        if (cli.command == "add")
+            return runAdd(cli, argc, argv);
+        if (cli.target.isEmpty()) {
+            QTextStream(stderr) << usage();
+            return 1;
+        }
+        return runQueueAdd(cli, argc, argv);
     }
 
     QtWebEngineQuick::initialize();

@@ -51,12 +51,16 @@ sift add <url>                    # clip it without opening the window
 sift list                         # list saved pages
 sift play <id|url>                # open and start reading
 sift export <id>                  # Markdown to stdout
-sift queue add <id|url>           # queue a previously saved page
+sift queue                        # list the queue
+sift queue add <url|id>           # queue a page, fetching it if it is new
+sift queue remove <id|url|n>      # take a page off the queue
+sift queue move <id|url|n> <n|top|bottom>
 ```
 
-`add` and `list` support `--json`. The headless `add` command saves a page
-without adding it to the queue; use `queue add` with its ID or saved URL to queue it. A running app
-refreshes itself after a headless `add`.
+`add`, `list`, `queue`, and `queue add` support `--json`. `add` saves a page
+without queueing it; `queue add` fetches and saves a new URL before queueing
+it, or queues a page you already saved. Queue positions start at 1. A running
+app refreshes itself after any of these.
 
 ## Keyboard
 
