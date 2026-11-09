@@ -5,6 +5,10 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 mkdir -p "$ROOT/build"
 cd "$ROOT/build"
 
+# qmake does not track the files listed inside a .qrc, so a QML edit alone
+# would leave the previously embedded copy in the binary. Refreshing the
+# resource manifest makes rcc re-read every listed file.
+touch "$ROOT/src/resources.qrc"
 qmake6 "$ROOT/sift.pro"
 make -j"$(nproc)"
 
