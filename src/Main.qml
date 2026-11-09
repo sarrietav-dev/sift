@@ -486,18 +486,14 @@ ApplicationWindow {
         onTriggered: win.readerPainted = true
     }
 
-    // A window returning from another workspace may still be waiting for its
-    // first frame, so ask again shortly after as well.
+    // Hiding and showing the view makes Chromium treat it as newly shown and
+    // draw a fresh frame. The cover keeps the window colour over it meanwhile.
     Timer {
-        id: repaintTimer
-        property int remaining: 0
-        interval: 120
-        repeat: true
+        id: reshowTimer
+        interval: 30
         onTriggered: {
-            if (win.readerReady)
-                readerView.runJavaScript("siftRepaint();")
-            if (--remaining <= 0)
-                stop()
+            readerView.visible = true
+            paintTimer.restart()
         }
     }
 
@@ -511,10 +507,11 @@ ApplicationWindow {
     Connections {
         target: backend
         function onReaderNeedsRepaint() {
-            if (win.readerReady)
-                readerView.runJavaScript("siftRepaint();")
-            repaintTimer.remaining = 3
-            repaintTimer.restart()
+            if (!win.readerReady || reshowTimer.running)
+                return
+            win.readerPainted = false
+            readerView.visible = false
+            reshowTimer.restart()
         }
         function onReaderRender(article) {
             win.renderArticle(article)

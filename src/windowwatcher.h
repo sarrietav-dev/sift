@@ -1,17 +1,14 @@
 #pragma once
 
-#include <QLocalSocket>
 #include <QObject>
 #include <QPointer>
-#include <QTimer>
 
 class QWindow;
 
-// Tells the reader when its window comes back into view. WebEngine can lose
-// its last frame while a window is hidden on another workspace and shows
-// black until the page draws again, which otherwise only happens on focus.
-// Qt reports some of these as expose events; Hyprland's event socket reports
-// every workspace change, including ones Qt never hears about.
+// Tells the reader when its window is shown again. Hyprland suspends a window
+// on a hidden workspace, which Qt reports as losing exposure. WebEngine then
+// drops its frame and stays black until it is told the view is shown again,
+// which otherwise only happens when the window is focused.
 class WindowWatcher : public QObject {
     Q_OBJECT
 
@@ -26,12 +23,6 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    void connectHyprland();
-    void readHyprland();
-
     QPointer<QWindow> m_window;
     bool m_exposed = true;
-    QLocalSocket m_hyprland;
-    QTimer m_reconnect;
-    QByteArray m_buffer;
 };
