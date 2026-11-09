@@ -151,6 +151,7 @@ void Backend::refreshSelectedPlaylist() {
 
 void Backend::addUrl(const QString &url) {
     m_autoplayAfterExtract = false;
+    m_openAfterExtract = false;
     m_error.clear();
     emit errorChanged();
     setStatus(tr("Fetching %1…").arg(QUrl(url).host().isEmpty() ? url : QUrl(url).host()));
@@ -159,6 +160,7 @@ void Backend::addUrl(const QString &url) {
 
 void Backend::openUrl(const QString &url, bool autoplay) {
     m_autoplayAfterExtract = autoplay;
+    m_openAfterExtract = true;
     m_error.clear();
     emit errorChanged();
     setStatus(tr("Fetching %1…").arg(QUrl(url).host().isEmpty() ? url : QUrl(url).host()));
@@ -174,11 +176,17 @@ void Backend::extracted(const QVariantMap &article) {
     }
     m_error.clear();
     emit errorChanged();
+    if (!m_library->addToQueue(id)) {
+        setError(tr("The page was saved, but could not be added to the queue."));
+        return;
+    }
     refreshAll();
-    setStatus(tr("Saved"));
-    m_fromQueue = false;
-    openArticle(id, m_autoplayAfterExtract);
+    setStatus(tr("Added to queue"));
+    emit toast(tr("Added to queue"));
+    if (m_openAfterExtract || !hasArticle())
+        openArticle(id, m_autoplayAfterExtract);
     m_autoplayAfterExtract = false;
+    m_openAfterExtract = false;
 }
 
 void Backend::extractionFailed(const QString &error) {
@@ -292,6 +300,12 @@ void Backend::playPause() { m_tts->toggle(); }
 void Backend::nextSentence() { m_tts->next(); }
 void Backend::previousSentence() { m_tts->previous(); }
 void Backend::playFromSentence(int index) { m_tts->playFrom(index); }
+void Backend::seekSentence(int index) {
+    if (m_tts->playing())
+        m_tts->playFrom(index);
+    else
+        m_tts->setStartSentence(index);
+}
 
 void Backend::setSpeed(double speed) {
     m_tts->setSpeed(speed);
@@ -684,8 +698,10 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
         "script-src 'unsafe-inline'; font-src data:; object-src 'none'; frame-src 'none'; "
         "form-action 'none'; connect-src 'none';\">"
         "<base href=\"%3\"><style>%4</style><style>%5</style></head>"
-        "<body><main id=\"sift-wrap\"><div id=\"sift-meta\">%6</div>"
-        "<article id=\"sift-content\">%7</article></main>"
-        "<script>%8</script></body></html>")
-        .arg(safeLanguage, dir, baseUrl, variables, css, meta, content, js);
+        "<body><main id=\"sift-wrap\"><header id=\"sift-header\"><div id=\"sift-meta\">%6</div>"
+        "<h1 id=\"sift-title\">%7</h1></header>"
+        "<article id=\"sift-content\">%8</article></main>"
+        "<script>%9</script></body></html>")
+        .arg(safeLanguage, dir, baseUrl, variables, css, meta,
+             article.value("title").toString().toHtmlEscaped(), content, js);
 }

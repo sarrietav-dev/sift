@@ -30,7 +30,7 @@ Dialog {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("Paste an article address. sift will load it, remove the clutter, and save a clean copy.")
+            text: qsTr("Paste an article address to add a clean copy to your queue.")
             color: theme.muted
             font.pixelSize: 12
             wrapMode: Text.WordWrap

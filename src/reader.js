@@ -5,6 +5,23 @@
     if (!content) return '[]';
     if (window.__siftWrapped) return JSON.stringify(window.__siftSentences || []);
 
+    // Some extractors retain the title in the body as well as the metadata.
+    var title = document.getElementById('sift-title');
+    var first = content.firstElementChild;
+    if (title && first && /^H[1-2]$/.test(first.tagName)
+        && first.textContent.trim().toLocaleLowerCase() === title.textContent.trim().toLocaleLowerCase()) {
+        first.remove();
+    }
+
+    var following = true;
+    window.addEventListener('wheel', function () { following = false; }, { passive: true });
+    window.addEventListener('touchmove', function () { following = false; }, { passive: true });
+    window.siftResumeFollowing = function () {
+        following = true;
+        var current = document.querySelector('.sift-sentence.sift-current');
+        if (current) current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
     var skipTags = new Set(['PRE', 'CODE', 'SCRIPT', 'STYLE', 'SVG', 'MATH', 'TABLE', 'TEXTAREA', 'NOSCRIPT', 'KBD', 'SAMP']);
     var blockSelector = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,dd,dt,div';
     var blocks = [];
@@ -167,7 +184,7 @@
 
     window.siftScrollToCurrent = function (index, center) {
         var current = document.querySelector('.sift-sentence[data-sift="' + index + '"]');
-        if (current) {
+        if (current && following) {
             current.scrollIntoView({ block: center ? 'center' : 'nearest', behavior: 'smooth' });
         }
         return true;
@@ -197,4 +214,3 @@
 
     return JSON.stringify(sentences);
 })();
-

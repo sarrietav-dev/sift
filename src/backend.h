@@ -89,6 +89,7 @@ public:
     Q_INVOKABLE void nextSentence();
     Q_INVOKABLE void previousSentence();
     Q_INVOKABLE void playFromSentence(int index);
+    Q_INVOKABLE void seekSentence(int index);
     Q_INVOKABLE void setSpeed(double speed);
     Q_INVOKABLE void setVoice(const QString &voice);
 
@@ -205,5 +206,6 @@ private:
     bool m_fromQueue = false;
     bool m_autoplayAfterWrap = false;
     bool m_autoplayAfterExtract = false;
+    bool m_openAfterExtract = false;
     bool m_wrapping = false;
 };

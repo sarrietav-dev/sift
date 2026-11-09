@@ -26,18 +26,24 @@ ApplicationWindow {
         : theme.radius <= 16 ? Material.LargeScale
         : Material.ExtraLargeScale
     font.family: theme.uiFont
+    palette.window: theme.background
+    palette.base: theme.background
+    palette.text: theme.foreground
+    palette.windowText: theme.foreground
+    palette.button: theme.panel
+    palette.buttonText: theme.foreground
+    palette.highlight: theme.accent
+    palette.highlightedText: theme.accentForeground
+    palette.placeholderText: theme.muted
 
     property bool addOpen: false
     property bool voiceOpen: false
     property bool settingsOpen: false
-    property bool tagsOpen: false
-    property bool playlistOpen: false
     property bool helpOpen: false
-    property bool focusMode: false
+    property bool focusMode: true
     property string toastText: ""
     property bool readerReady: false
-    property bool modalOpen: addDialog.visible || voiceDialog.visible || settingsDialog.visible
-        || tagsDialog.visible || playlistDialog.visible || helpOpen
+    property bool modalOpen: addDialog.visible || voiceDialog.visible || settingsDialog.visible || helpOpen
 
     function showToast(message) {
         toastText = message
@@ -70,17 +76,9 @@ ApplicationWindow {
     Shortcut { sequence: "="; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
     Shortcut { sequence: "V"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: voiceDialog.open() }
     Shortcut { sequence: "A"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: addDialog.open() }
-    Shortcut { sequence: "/"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: { win.focusMode = false; sidebar.focusSearch() } }
-    Shortcut { sequence: "T"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: tagsDialog.open() }
-    Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.toggleCurrentRead() }
-    Shortcut { sequence: "U"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.addCurrentToQueue() }
-    Shortcut { sequence: "Shift+P"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: playlistDialog.open() }
     Shortcut { sequence: "E"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.copyMarkdown() }
     Shortcut { sequence: "F"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: win.focusMode = !win.focusMode }
     Shortcut { sequence: "Ctrl+,"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: settingsDialog.open() }
-    Shortcut { sequence: "1"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSection("library") }
-    Shortcut { sequence: "2"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSection("playlists") }
-    Shortcut { sequence: "3"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSection("queue") }
     Shortcut {
         sequence: "J"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
         onActivated: win.focusMode ? readerView.runJavaScript("window.scrollBy(0, 140)") : sidebar.moveSelection(1)
@@ -89,13 +87,10 @@ ApplicationWindow {
         sequence: "K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
         onActivated: win.focusMode ? readerView.runJavaScript("window.scrollBy(0, -140)") : sidebar.moveSelection(-1)
     }
-    Shortcut { sequence: "Return"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: sidebar.activateSelection() }
+    Shortcut { sequence: "Return"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.activateSelection() }
     Shortcut { sequence: "PageDown"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("window.scrollBy(0, window.innerHeight * 0.85)") }
     Shortcut { sequence: "PageUp"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("window.scrollBy(0, -window.innerHeight * 0.85)") }
-    Shortcut {
-        sequence: "Escape"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen
-        onActivated: sidebar.escapeSearch()
-    }
+    Shortcut { sequence: "Escape"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: win.focusMode = true }
 
     ColumnLayout {
         anchors.fill: parent
@@ -114,44 +109,49 @@ ApplicationWindow {
                 anchors.rightMargin: 12
                 spacing: 10
 
-                Label {
-                    text: "sift"
-                    color: theme.accent
-                    font.pixelSize: 19
-                    font.weight: Font.DemiBold
-                }
-
-                Rectangle {
-                    width: 1
-                    height: 22
-                    color: theme.border
-                    visible: backend.hasArticle
+                FlatButton {
+                    text: "☰"
+                    hint: qsTr("Toggle queue (F)")
+                    font.pixelSize: 16
+                    onClicked: win.focusMode = !win.focusMode
                 }
 
                 Label {
                     Layout.fillWidth: true
-                    text: backend.hasArticle ? backend.currentArticle.title : backend.status
-                    color: backend.hasArticle ? theme.foreground : theme.muted
-                    font.pixelSize: 14
+                    text: backend.hasArticle ? (backend.currentArticle.domain || "sift") : "sift"
+                    color: theme.muted
+                    font.pixelSize: 12
                     elide: Text.ElideRight
                 }
 
-                ToolButton {
-                    text: qsTr("Add")
+                FlatButton {
+                    text: qsTr("+ Add page")
+                    hint: qsTr("Add a page (A)")
                     font.pixelSize: 13
                     onClicked: addDialog.open()
                 }
 
-                ToolButton {
+                FlatButton {
                     text: "?"
+                    hint: qsTr("Keyboard shortcuts (?)")
                     font.pixelSize: 13
                     onClicked: win.helpOpen = !win.helpOpen
                 }
 
-                ToolButton {
-                    text: "⚙"
-                    font.pixelSize: 15
-                    onClicked: settingsDialog.open()
+                FlatButton {
+                    text: "⋯"
+                    hint: qsTr("Article and settings menu")
+                    font.pixelSize: 20
+                    onClicked: actionsMenu.open()
+                    Menu {
+                        id: actionsMenu
+                        MenuItem { text: qsTr("Open original"); enabled: backend.hasArticle; onTriggered: backend.openOriginal() }
+                        MenuItem { text: qsTr("Add to queue"); enabled: backend.hasArticle; onTriggered: backend.addCurrentToQueue() }
+                        MenuItem { text: qsTr("Copy Markdown"); enabled: backend.hasArticle; onTriggered: backend.copyMarkdown() }
+                        MenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: readerView.runJavaScript("siftResumeFollowing();") }
+                        MenuSeparator { }
+                        MenuItem { text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
+                    }
                 }
             }
 
@@ -215,12 +215,13 @@ ApplicationWindow {
                 visible: !win.focusMode
                 Layout.fillHeight: true
                 Layout.preferredWidth: visible ? 326 : 0
+                onAddPage: addDialog.open()
             }
 
             Rectangle {
                 visible: !win.focusMode
                 Layout.fillHeight: true
-                width: 1
+                Layout.preferredWidth: 1
                 color: theme.border
             }
 
@@ -291,7 +292,7 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignHCenter
-                            text: qsTr("Press A to add a page, or choose one from the library. Space starts reading.")
+                            text: qsTr("Add a page to your queue. Space starts reading aloud.")
                             color: theme.muted
                             font.pixelSize: 14
                             wrapMode: Text.WordWrap
@@ -430,14 +431,6 @@ ApplicationWindow {
 
     SettingsDialog {
         id: settingsDialog
-    }
-
-    TagsDialog {
-        id: tagsDialog
-    }
-
-    PlaylistPickerDialog {
-        id: playlistDialog
     }
 
     ShortcutsOverlay {

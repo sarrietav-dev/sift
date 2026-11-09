@@ -5,111 +5,104 @@ import QtQuick.Layouts
 Rectangle {
     id: player
     signal openVoice()
+    color: theme.background
+    Layout.preferredHeight: 54
 
-    color: theme.panel
-    Layout.preferredHeight: 64
-
-    Rectangle {
-        anchors.top: parent.top
-        width: parent.width
-        height: 1
-        color: theme.border
-    }
+    Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: theme.border }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 12
-        anchors.rightMargin: 12
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
         spacing: 8
 
-        ToolButton {
+        FlatButton {
             text: "‹"
-            font.pixelSize: 20
+            font.pixelSize: 22
+            hint: qsTr("Previous sentence ([)")
             enabled: backend.sentenceCount > 0
             onClicked: backend.previousSentence()
         }
-
-        ToolButton {
-            text: backend.buffering ? "…" : backend.playing ? "⏸" : "▶"
-            font.pixelSize: 20
+        FlatButton {
+            text: backend.buffering ? "…" : backend.playing ? "Ⅱ" : "▶"
+            font.pixelSize: 17
+            hint: backend.playing ? qsTr("Pause (Space)") : qsTr("Play (Space)")
             enabled: backend.sentenceCount > 0
             onClicked: backend.playPause()
         }
-
-        ToolButton {
+        FlatButton {
             text: "›"
-            font.pixelSize: 20
+            font.pixelSize: 22
+            hint: qsTr("Next sentence (])")
             enabled: backend.sentenceCount > 0
             onClicked: backend.nextSentence()
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 1
-
-            Label {
-                Layout.fillWidth: true
-                text: backend.currentArticle.title || qsTr("Nothing playing")
-                color: theme.foreground
-                font.pixelSize: 13
-                elide: Text.ElideRight
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: backend.buffering ? qsTr("Buffering…") : ((backend.ttsStatus && backend.ttsStatus !== "") ? backend.ttsStatus : backend.status)
-                color: backend.error !== "" ? theme.red : theme.muted
-                font.pixelSize: 10
-                elide: Text.ElideRight
-            }
-        }
-
         Label {
-            text: backend.sentenceCount > 0
-                ? (backend.currentSentence + 1) + " / " + backend.sentenceCount
-                : ""
+            visible: parent.width > 850
+            Layout.preferredWidth: 100
+            text: backend.buffering ? qsTr("Preparing…") : backend.playing ? qsTr("Listening") : qsTr("Paused")
             color: theme.muted
-            font.pixelSize: 10
+            font.pixelSize: 12
+            elide: Text.ElideRight
         }
 
-        Rectangle {
-            width: 130
-            height: 4
-            radius: 2
-            color: theme.border
-
-            Rectangle {
-                width: parent.width * (backend.sentenceCount > 0
-                    ? (backend.currentSentence + 1) / backend.sentenceCount : 0)
-                height: parent.height
-                radius: 2
-                color: theme.accent
+        Slider {
+            id: progress
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            from: 0
+            to: Math.max(0, backend.sentenceCount - 1)
+            stepSize: 1
+            enabled: backend.sentenceCount > 0
+            value: backend.currentSentence
+            Accessible.name: qsTr("Sentence position")
+            onMoved: backend.seekSentence(Math.round(value))
+            background: Rectangle {
+                x: progress.leftPadding
+                y: progress.topPadding + progress.availableHeight / 2 - height / 2
+                width: progress.availableWidth
+                height: 2
+                color: theme.border
+                Rectangle { width: progress.visualPosition * parent.width; height: parent.height; color: theme.accent }
+            }
+            handle: Rectangle {
+                x: progress.leftPadding + progress.visualPosition * (progress.availableWidth - width)
+                y: progress.topPadding + progress.availableHeight / 2 - height / 2
+                width: 8; height: 8; radius: 4
+                color: progress.activeFocus || progress.pressed ? theme.accent : theme.foreground
             }
         }
 
-        ToolButton {
-            text: "−"
-            font.pixelSize: 14
-            onClicked: backend.setSpeed(Math.max(0.5, backend.speed - 0.1))
-        }
-
         Label {
-            text: backend.speed.toFixed(1) + "×"
-            color: theme.foreground
+            text: backend.sentenceCount > 0 ? qsTr("%1 / %2").arg(backend.currentSentence + 1).arg(backend.sentenceCount) : ""
+            color: theme.muted
+            font.family: theme.monoFont
             font.pixelSize: 11
-            horizontalAlignment: Text.AlignHCenter
-            Layout.preferredWidth: 34
+            Accessible.name: qsTr("Sentence %1 of %2").arg(backend.currentSentence + 1).arg(backend.sentenceCount)
         }
-
-        ToolButton {
-            text: "+"
-            font.pixelSize: 14
-            onClicked: backend.setSpeed(Math.min(2.0, backend.speed + 0.1))
+        FlatButton {
+            text: backend.speed.toFixed(1) + "×"
+            hint: qsTr("Playback speed; use − and + to change")
+            font.pixelSize: 12
+            onClicked: speedMenu.open()
+            Menu {
+                id: speedMenu
+                Repeater {
+                    model: [0.75, 1.0, 1.25, 1.5, 2.0]
+                    MenuItem {
+                        required property real modelData
+                        text: modelData.toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + "×"
+                        onTriggered: backend.setSpeed(modelData)
+                    }
+                }
+            }
         }
-
-        ToolButton {
+        FlatButton {
             text: backend.voice
-            font.pixelSize: 10
+            hint: qsTr("Choose voice (V)")
+            font.pixelSize: 11
             onClicked: player.openVoice()
         }
     }

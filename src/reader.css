@@ -39,12 +39,20 @@ body {
 }
 
 #sift-meta {
-    margin-bottom: 2.4rem;
+    margin-bottom: 1.2rem;
     color: var(--sift-muted);
     font-family: "Noto Sans", "Liberation Sans", sans-serif;
     font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+#sift-header { margin-bottom: 3rem; }
+#sift-title {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.12;
+    letter-spacing: -0.035em;
 }
 
 #sift-content > :first-child {

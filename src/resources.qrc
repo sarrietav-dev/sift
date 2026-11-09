@@ -3,6 +3,7 @@
         <file alias="Main.qml">Main.qml</file>
         <file alias="SidebarPanel.qml">SidebarPanel.qml</file>
         <file alias="PlayerBar.qml">PlayerBar.qml</file>
+        <file alias="FlatButton.qml">FlatButton.qml</file>
         <file alias="AddPageDialog.qml">AddPageDialog.qml</file>
         <file alias="VoicePickerDialog.qml">VoicePickerDialog.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>

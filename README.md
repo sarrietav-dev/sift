@@ -11,12 +11,11 @@ sentence with a local Kokoro voice.
 - Loads a public URL in Qt WebEngine and extracts the article with
   [Defuddle](https://github.com/kepano/defuddle), the same extractor used by
   Obsidian Web Clipper.
-- Saves a clean Markdown file and a full article snapshot, indexed in SQLite
-  for search, tags, read state, and resume position.
+- Saves a clean Markdown file and a full article snapshot, with resume position.
 - Reads aloud through [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI)
   at `http://127.0.0.1:8880`, with sentence highlighting, prefetch, and a voice
   and speed picker.
-- Keeps a queue and named playlists that advance automatically.
+- Keeps a single reading queue that advances automatically.
 - Follows the Omarchy theme, light/dark mode, window rounding, and language.
 
 ## Requirements
@@ -65,16 +64,10 @@ sift queue add <id|url>           # append to the reading queue
 | `-` / `+` | Slower / faster |
 | `V` | Voice picker |
 | `A` | Add a page |
-| `/` | Search the library |
-| `1` / `2` / `3` | Library / Playlists / Queue |
-| `J` / `K` | Move in the sidebar (scroll in focus mode) |
-| `Enter` | Open or play the selection |
-| `T` | Edit tags |
-| `M` | Mark read / unread |
-| `U` | Add the current page to the queue |
-| `Shift+P` | Add the current page to a playlist |
+| `J` / `K` | Move in the queue, or scroll the article when the queue is hidden |
+| `Enter` | Open the selected queue item |
 | `E` | Copy the Markdown export |
-| `F` | Focus mode |
+| `F` | Show / hide the queue |
 | `PageUp` / `PageDown` | Scroll the article |
 | `?` | All shortcuts |
 | `Q` | Quit |

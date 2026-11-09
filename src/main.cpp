@@ -309,7 +309,7 @@ int runGui(const Cli &cli, int argc, char **argv) {
             return 0;
     }
 
-    QQuickStyle::setStyle("Material");
+    QQuickStyle::setStyle("Basic");
 
     Translator translator;
     app.installTranslator(&translator);

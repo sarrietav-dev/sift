@@ -164,8 +164,14 @@ private slots:
         QCOMPARE(library.queue().size(), 2);
         QVERIFY(library.moveQueueItem(0, 1));
         QCOMPARE(library.queue().at(0).toMap().value("id").toString(), second);
+        QVERIFY(library.removeFromQueue(second));
+        QCOMPARE(library.queue().size(), 1);
+        QCOMPARE(library.queue().at(0).toMap().value("id").toString(), first);
+        QVERIFY(!library.article(second).isEmpty());
         library.clearQueue();
         QCOMPARE(library.queue().size(), 0);
+        QVERIFY(!library.article(first).isEmpty());
+        QCOMPARE(library.playlistItems(playlist).size(), 1);
     }
 
     void libraryDeletesArticleAndFiles() {
