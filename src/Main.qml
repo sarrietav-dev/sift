@@ -24,9 +24,6 @@ ApplicationWindow {
     palette.highlightedText: theme.accentForeground
     palette.placeholderText: theme.muted
 
-    property bool addOpen: false
-    property bool voiceOpen: false
-    property bool settingsOpen: false
     property bool helpOpen: false
     property bool focusMode: true
     property string toastText: ""
@@ -60,24 +57,24 @@ ApplicationWindow {
     }
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: win.helpOpen = !win.helpOpen }
-    Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: Qt.quit() }
+    Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: Qt.quit() }
     Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.controlFocused; autoRepeat: false; onActivated: backend.playPause() }
-    Shortcut { sequence: "["; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.previousSentence() }
-    Shortcut { sequence: "]"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.nextSentence() }
-    Shortcut { sequence: "-"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.max(0.5, backend.speed - 0.1)) }
-    Shortcut { sequence: "+"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
-    Shortcut { sequence: "="; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
-    Shortcut { sequence: "V"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: voiceDialog.open() }
+    Shortcut { sequence: "["; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.previousSentence() }
+    Shortcut { sequence: "]"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.nextSentence() }
+    Shortcut { sequence: "-"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.setSpeed(Math.max(0.5, backend.speed - 0.1)) }
+    Shortcut { sequence: "+"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
+    Shortcut { sequence: "="; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.setSpeed(Math.min(2.0, backend.speed + 0.1)) }
+    Shortcut { sequence: "V"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: voiceDialog.open() }
     Shortcut { sequence: "A"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !backend.busy; onActivated: addDialog.open() }
-    Shortcut { sequence: "E"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.copyMarkdown() }
-    Shortcut { sequence: "F"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: win.focusMode = !win.focusMode }
+    Shortcut { sequence: "E"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: backend.copyMarkdown() }
+    Shortcut { sequence: "F"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: win.focusMode = !win.focusMode }
     Shortcut { sequence: "Ctrl+,"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: settingsDialog.open() }
     Shortcut {
-        sequence: "J"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
+        sequence: "J"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen
         onActivated: win.focusMode ? readerView.runJavaScript("siftManualScroll(140)") : sidebar.moveSelection(1)
     }
     Shortcut {
-        sequence: "K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
+        sequence: "K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen
         onActivated: win.focusMode ? readerView.runJavaScript("siftManualScroll(-140)") : sidebar.moveSelection(-1)
     }
     Shortcut { sequence: "Return"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.activateSelection() }

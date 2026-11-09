@@ -5,7 +5,6 @@ import QtQuick.Layouts
 Rectangle {
     id: sidebar
     color: theme.background
-    readonly property bool searchActive: false
     readonly property bool popupOpen: clearDialog.visible || queueMenu.visible || itemMenuOpen
     property bool itemMenuOpen: false
     signal addPage()

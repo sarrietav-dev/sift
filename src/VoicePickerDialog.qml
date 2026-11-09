@@ -41,7 +41,7 @@ SiftDialog {
                 Accessible.name: qsTr("Search voices")
                 font.pixelSize: 13
                 selectByMouse: true
-                onTextChanged: dialog.refresh()
+                onTextChanged: { dialog.refresh(); voiceList.currentIndex = 0 }
                 Keys.onDownPressed: if (voiceList.count) { voiceList.currentIndex = 0; voiceList.forceActiveFocus() }
                 onAccepted: if (dialog.filtered.length) { backend.setVoice(dialog.filtered[0].id); dialog.close() }
             }
@@ -81,6 +81,14 @@ SiftDialog {
             spacing: 2
             model: dialog.filtered
             currentIndex: 0
+            Keys.onDownPressed: {
+                currentIndex = Math.min(count - 1, currentIndex + 1)
+                positionViewAtIndex(currentIndex, ListView.Contain)
+            }
+            Keys.onUpPressed: {
+                currentIndex = Math.max(0, currentIndex - 1)
+                positionViewAtIndex(currentIndex, ListView.Contain)
+            }
             Keys.onReturnPressed: if (currentIndex >= 0 && currentIndex < dialog.filtered.length) { backend.setVoice(dialog.filtered[currentIndex].id); dialog.close() }
             Keys.onEnterPressed: if (currentIndex >= 0 && currentIndex < dialog.filtered.length) { backend.setVoice(dialog.filtered[currentIndex].id); dialog.close() }
             ScrollBar.vertical: ScrollBar { }
