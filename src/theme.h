@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QFileSystemWatcher>
 #include <QObject>
 #include <QProcess>
@@ -46,6 +47,9 @@ public:
     QString uiFont() const { return "Noto Sans"; }
     QString serifFont() const { return "IBM Plex Serif"; }
     QString monoFont() const { return "CaskaydiaCove Nerd Font"; }
+
+    // A theme colour at the given opacity, for hover and selection tints.
+    Q_INVOKABLE QColor withAlpha(const QString &color, double alpha) const;
 
     static QString readAccent(const QString &path);
     static QString readValue(const QString &path, const QString &key, const QString &fallback = {});

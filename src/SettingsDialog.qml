@@ -59,8 +59,10 @@ SiftDialog {
             Label { text: qsTr("Reading font"); color: theme.foreground; font.pixelSize: 13 }
             SiftComboBox {
                 id: fontBox
+                objectName: "fontBox"
                 Layout.fillWidth: true
                 model: backend.fonts
+                previewFonts: true
                 hint: qsTr("Reading font")
             }
             Label {

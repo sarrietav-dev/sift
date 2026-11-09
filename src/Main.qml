@@ -156,14 +156,16 @@ ApplicationWindow {
                     iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"
                     hint: qsTr("Article and settings menu")
                     onClicked: actionsMenu.open()
-                    Menu {
+                    SiftMenu {
                         id: actionsMenu
-                        MenuItem { text: qsTr("Open original"); enabled: backend.hasArticle; onTriggered: backend.openOriginal() }
-                        MenuItem { text: qsTr("Add to queue"); enabled: backend.hasArticle; onTriggered: backend.addCurrentToQueue() }
-                        MenuItem { text: qsTr("Copy Markdown"); enabled: backend.hasArticle; onTriggered: backend.copyMarkdown() }
-                        MenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: { win.following = true; readerView.runJavaScript("siftResumeFollowing();") } }
-                        MenuSeparator { }
-                        MenuItem { text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
+                        objectName: "actionsMenu"
+                        SiftMenuItem { text: qsTr("Open original"); enabled: backend.hasArticle; onTriggered: backend.openOriginal() }
+                        SiftMenuItem { text: qsTr("Add to queue"); enabled: backend.hasArticle; onTriggered: backend.addCurrentToQueue() }
+                        SiftMenuItem { text: qsTr("Copy Markdown"); shortcut: "E"; enabled: backend.hasArticle; onTriggered: backend.copyMarkdown() }
+                        SiftMenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: { win.following = true; readerView.runJavaScript("siftResumeFollowing();") } }
+                        SiftMenuSeparator { }
+                        SiftMenuItem { text: qsTr("Keyboard shortcuts"); shortcut: "?"; onTriggered: win.helpOpen = true }
+                        SiftMenuItem { text: qsTr("Settings…"); shortcut: "Ctrl+,"; onTriggered: settingsDialog.open() }
                     }
                 }
             }

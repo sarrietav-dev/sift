@@ -89,13 +89,17 @@ Rectangle {
             hint: qsTr("Playback speed; use − and + to change")
             font.pixelSize: 12
             onClicked: speedMenu.open()
-            Menu {
+            SiftMenu {
                 id: speedMenu
+                implicitWidth: 150
                 Repeater {
-                    model: [0.75, 1.0, 1.25, 1.5, 2.0]
-                    MenuItem {
+                    model: [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+                    SiftMenuItem {
                         required property real modelData
+                        implicitWidth: 150
                         text: modelData.toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + "×"
+                        checkable: true
+                        checked: Math.abs(backend.speed - modelData) < 0.01
                         onTriggered: backend.setSpeed(modelData)
                     }
                 }

@@ -35,9 +35,9 @@ Rectangle {
             Item { Layout.fillWidth: true }
             FlatButton { iconPath: "M12 5v14 M5 12h14"; hint: qsTr("Add a page (A)"); enabled: !backend.busy; onClicked: sidebar.addPage() }
             FlatButton { iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"; hint: qsTr("Queue actions"); enabled: backend.queue.length > 0; onClicked: queueMenu.open()
-                Menu {
+                SiftMenu {
                     id: queueMenu
-                    MenuItem { text: qsTr("Clear queue…"); onTriggered: clearDialog.open() }
+                    SiftMenuItem { text: qsTr("Clear queue…"); destructive: true; onTriggered: clearDialog.open() }
                 }
             }
         }
@@ -82,14 +82,14 @@ Rectangle {
                     FlatButton {
                         iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"; hint: qsTr("Queue item actions")
                         onClicked: itemMenu.open()
-                        Menu {
+                        SiftMenu {
                             id: itemMenu
                             onVisibleChanged: sidebar.itemMenuOpen = visible
-                            MenuItem { text: qsTr("Play"); onTriggered: backend.playQueueAt(row.index) }
-                            MenuItem { text: qsTr("Move up"); enabled: row.index > 0; onTriggered: { const from = row.index; queueList.currentIndex = from - 1; backend.moveQueueItem(from, from - 1) } }
-                            MenuItem { text: qsTr("Move down"); enabled: row.index < queueList.count - 1; onTriggered: { const from = row.index; queueList.currentIndex = from + 1; backend.moveQueueItem(from, from + 1) } }
-                            MenuSeparator { }
-                            MenuItem { text: qsTr("Remove from queue"); onTriggered: backend.removeFromQueue(row.modelData.id) }
+                            SiftMenuItem { text: qsTr("Play"); onTriggered: backend.playQueueAt(row.index) }
+                            SiftMenuItem { text: qsTr("Move up"); enabled: row.index > 0; onTriggered: { const from = row.index; queueList.currentIndex = from - 1; backend.moveQueueItem(from, from - 1) } }
+                            SiftMenuItem { text: qsTr("Move down"); enabled: row.index < queueList.count - 1; onTriggered: { const from = row.index; queueList.currentIndex = from + 1; backend.moveQueueItem(from, from + 1) } }
+                            SiftMenuSeparator { }
+                            SiftMenuItem { text: qsTr("Remove from queue"); destructive: true; onTriggered: backend.removeFromQueue(row.modelData.id) }
                         }
                     }
                 }

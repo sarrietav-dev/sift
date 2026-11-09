@@ -8,6 +8,9 @@
         <file alias="SiftDialog.qml">SiftDialog.qml</file>
         <file alias="SiftField.qml">SiftField.qml</file>
         <file alias="SiftComboBox.qml">SiftComboBox.qml</file>
+        <file alias="SiftMenu.qml">SiftMenu.qml</file>
+        <file alias="SiftMenuItem.qml">SiftMenuItem.qml</file>
+        <file alias="SiftMenuSeparator.qml">SiftMenuSeparator.qml</file>
         <file alias="AddPageDialog.qml">AddPageDialog.qml</file>
         <file alias="VoicePickerDialog.qml">VoicePickerDialog.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>

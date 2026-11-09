@@ -109,6 +109,17 @@ private slots:
         QTest::qWait(200);
         if (qEnvironmentVariableIsSet("SIFT_GUI_QUEUE_SCREENSHOT"))
             QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_QUEUE_SCREENSHOT")));
+        window->resize(1180, 780);
+        QObject *actionsMenu = window->findChild<QObject *>("actionsMenu");
+        QVERIFY(actionsMenu);
+        QVERIFY(QMetaObject::invokeMethod(actionsMenu, "open"));
+        QTRY_VERIFY(actionsMenu->property("visible").toBool());
+        QTest::qWait(200);
+        if (qEnvironmentVariableIsSet("SIFT_GUI_MENU_SCREENSHOT"))
+            QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_MENU_SCREENSHOT")));
+        QVERIFY(QMetaObject::invokeMethod(actionsMenu, "close"));
+        QTRY_VERIFY(!actionsMenu->property("visible").toBool());
+
         for (const char *name : {"addDialog", "voiceDialog", "settingsDialog"}) {
             QObject *dialog = window->findChild<QObject *>(name);
             QVERIFY2(dialog, name);
@@ -117,6 +128,25 @@ private slots:
             QTest::qWait(100);
             if (QByteArray(name) == "settingsDialog" && qEnvironmentVariableIsSet("SIFT_GUI_SETTINGS_SCREENSHOT"))
                 QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_SETTINGS_SCREENSHOT")));
+            if (QByteArray(name) == "settingsDialog") {
+                // The font list opens on the current font, filters as you
+                // type, and picks the highlighted entry with Enter.
+                QObject *fontBox = window->findChild<QObject *>("fontBox");
+                QVERIFY(fontBox);
+                QVERIFY(QMetaObject::invokeMethod(fontBox, "openPopup"));
+                QTRY_VERIFY(fontBox->property("popupOpen").toBool());
+                QTest::qWait(150);
+                if (qEnvironmentVariableIsSet("SIFT_GUI_DROPDOWN_SCREENSHOT"))
+                    QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_DROPDOWN_SCREENSHOT")));
+                const QString target = backend.fonts().last().toString();
+                for (const QChar &c : target)
+                    QTest::keyClick(window, c.toLatin1());
+                QTRY_VERIFY(!fontBox->property("filtered").toList().isEmpty());
+                QVERIFY(fontBox->property("filtered").toList().size() < backend.fonts().size());
+                QTest::keyClick(window, Qt::Key_Return);
+                QTRY_VERIFY(!fontBox->property("popupOpen").toBool());
+                QVERIFY(fontBox->property("currentText").toString().contains(target, Qt::CaseInsensitive));
+            }
             QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
             QTRY_VERIFY(!dialog->property("visible").toBool());
         }

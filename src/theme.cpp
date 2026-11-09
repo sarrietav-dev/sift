@@ -86,6 +86,12 @@ QString Theme::readValue(const QString &path, const QString &key, const QString 
     return match.hasMatch() ? match.captured(1) : fallback;
 }
 
+QColor Theme::withAlpha(const QString &color, double alpha) const {
+    QColor value(color);
+    value.setAlphaF(qBound(0.0, alpha, 1.0));
+    return value;
+}
+
 QString Theme::readAccent(const QString &path) {
     return colorOr(readValue(path, "accent"), "#FFD60A");
 }
