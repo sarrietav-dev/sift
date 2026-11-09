@@ -71,6 +71,35 @@ private slots:
         QCOMPARE(theme.accentForeground(), QString("white"));
     }
 
+    void themeAppearanceOverridesOmarchy() {
+        QTemporaryDir dir;
+        QDir(dir.path()).mkpath("theme");
+        writeFile(dir.path() + "/theme/colors.toml",
+                  "mode = \"dark\"\naccent = \"#97786d\"\nbackground = \"#27241f\"\nforeground = \"#e1d5c2\"\n");
+        Theme theme(dir.path());
+        QCOMPARE(theme.background(), QString("#27241f"));
+        theme.setAppearance("light");
+        QCOMPARE(theme.dark(), false);
+        QCOMPARE(theme.background(), Theme::builtIn(false).background);
+        QCOMPARE(theme.target().value("background").toString(), Theme::builtIn(false).background);
+
+        // A crossfade passes through blended colours and ends on the target.
+        theme.setAnimated(true);
+        QSignalSpy steps(&theme, &Theme::changed);
+        theme.setAppearance("omarchy");
+        QCOMPARE(theme.target().value("background").toString(), QString("#27241f"));
+        QTRY_COMPARE(theme.background(), QString("#27241f"));
+        QVERIFY(steps.size() > 2);
+
+        // Mid-switch, Omarchy removes the theme folder; the colours hold.
+        QFile::remove(dir.path() + "/theme/colors.toml");
+        QTest::qWait(200);
+        QCOMPARE(theme.background(), QString("#27241f"));
+
+        theme.setAppearance("bogus");
+        QCOMPARE(theme.appearance(), QString("omarchy"));
+    }
+
     void translatorFollowsLanguage() {
         QTemporaryDir dir;
         writeFile(dir.path() + "/language", "pt-BR\n");

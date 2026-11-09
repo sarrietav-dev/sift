@@ -110,6 +110,8 @@ public:
     Q_INVOKABLE void setSection(const QString &section);
     Q_INVOKABLE void setFontSize(int size);
     Q_INVOKABLE void setReaderFont(const QString &family);
+    // Follow Omarchy, the system, or stay light or dark; saved at once.
+    Q_INVOKABLE void setAppearance(const QString &appearance);
 
     Q_INVOKABLE void toggleCurrentRead();
     Q_INVOKABLE void markCurrentRead();

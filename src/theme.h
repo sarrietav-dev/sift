@@ -5,9 +5,13 @@
 #include <QObject>
 #include <QProcess>
 #include <QTimer>
+#include <QVariantAnimation>
+#include <QVariantMap>
 
-// Follows the Omarchy theme live: colors, light/dark mode, and Hyprland's
-// window rounding. Every visible color in sift comes from here.
+// Every visible color in sift comes from here. By default it follows the
+// Omarchy theme live: colors, light/dark mode, and Hyprland's window
+// rounding. Like Spotifast, it can instead follow the system's light or dark
+// preference, or stay light or dark. A change crossfades rather than snaps.
 class Theme : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString accent READ accent NOTIFY changed)
@@ -26,52 +30,74 @@ class Theme : public QObject {
     Q_PROPERTY(QString uiFont READ uiFont NOTIFY changed)
     Q_PROPERTY(QString serifFont READ serifFont NOTIFY changed)
     Q_PROPERTY(QString monoFont READ monoFont NOTIFY changed)
+    Q_PROPERTY(QString appearance READ appearance WRITE setAppearance NOTIFY appearanceChanged)
+    // The palette a transition is heading to. The reader takes it at once and
+    // animates there with CSS, instead of repainting on every step.
+    Q_PROPERTY(QVariantMap target READ target NOTIFY targetChanged)
 
 public:
     explicit Theme(const QString &currentDirectory = {}, QObject *parent = nullptr, const QString &hyprctl = {});
     ~Theme() override;
 
-    QString accent() const { return m_accent; }
+    struct Palette {
+        QString accent, background, foreground, muted, panel, border, selection, red, green, mode;
+        bool operator==(const Palette &o) const {
+            return accent == o.accent && background == o.background && foreground == o.foreground
+                && muted == o.muted && panel == o.panel && border == o.border && selection == o.selection
+                && red == o.red && green == o.green && mode == o.mode;
+        }
+    };
+
+    QString accent() const { return m_shown.accent; }
     QString accentForeground() const;
-    QString background() const { return m_background; }
-    QString foreground() const { return m_foreground; }
-    QString muted() const { return m_muted; }
-    QString panel() const { return m_panel; }
-    QString borderColor() const { return m_border; }
-    QString selection() const { return m_selection; }
-    QString red() const { return m_red; }
-    QString green() const { return m_green; }
-    QString mode() const { return m_mode; }
-    bool dark() const { return m_mode == "dark"; }
+    QString background() const { return m_shown.background; }
+    QString foreground() const { return m_shown.foreground; }
+    QString muted() const { return m_shown.muted; }
+    QString panel() const { return m_shown.panel; }
+    QString borderColor() const { return m_shown.border; }
+    QString selection() const { return m_shown.selection; }
+    QString red() const { return m_shown.red; }
+    QString green() const { return m_shown.green; }
+    QString mode() const { return m_shown.mode; }
+    bool dark() const { return m_shown.mode == "dark"; }
     int radius() const { return m_radius; }
     QString uiFont() const { return "Noto Sans"; }
     QString serifFont() const { return "IBM Plex Serif"; }
     QString monoFont() const { return "CaskaydiaCove Nerd Font"; }
+    QString appearance() const { return m_appearance; }
+    QVariantMap target() const;
+
+    // "omarchy", "system", "light", or "dark".
+    void setAppearance(const QString &appearance);
+    // Crossfades are off until the window is up, so startup never animates.
+    void setAnimated(bool animated) { m_animated = animated; }
 
     // A theme colour at the given opacity, for hover and selection tints.
     Q_INVOKABLE QColor withAlpha(const QString &color, double alpha) const;
 
     static QString readAccent(const QString &path);
     static QString readValue(const QString &path, const QString &key, const QString &fallback = {});
+    static Palette builtIn(bool dark);
 
 signals:
     void changed();
+    void appearanceChanged();
+    void targetChanged();
 
 private:
     void reload();
     void refreshRounding();
+    void apply();
+    Palette effective() const;
 
     QString m_directory;
-    QString m_accent = "#FFD60A";
-    QString m_background = "#1a1a1a";
-    QString m_foreground = "#f0f0f0";
-    QString m_muted = "#888888";
-    QString m_panel = "#222222";
-    QString m_border = "#333333";
-    QString m_selection = "#444444";
-    QString m_red = "#D14D41";
-    QString m_green = "#879A39";
-    QString m_mode = "dark";
+    QString m_appearance = "omarchy";
+    Palette m_omarchy;
+    Palette m_from;
+    Palette m_to;
+    Palette m_shown;
+    bool m_animated = false;
+    QVariantAnimation m_fade;
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
     QString m_hyprctl;

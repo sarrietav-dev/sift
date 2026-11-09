@@ -430,6 +430,8 @@ int runGui(const Cli &cli, int argc, char **argv) {
 
     QQuickWindow *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     backend.watchWindow(window);
+    // Theme changes crossfade once the first frame is up.
+    QTimer::singleShot(400, &theme, [&theme] { theme.setAnimated(true); });
 
     QLocalServer server;
     QLocalServer::removeServer(socketName());

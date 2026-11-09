@@ -18,6 +18,9 @@ sentence with a local Kokoro voice.
 - Keeps a single reading queue that advances automatically.
 - Reopens the article you were reading, where you left off.
 - Follows the Omarchy theme, light/dark mode, window rounding, and language.
+  Like Spotifast, it can instead follow the system's light or dark preference,
+  or stay light or dark (Settings, or the **⋯ → Appearance** menu). Theme
+  changes crossfade.
 - Lets you choose any installed font and text size for the reading view.
 
 ## Requirements

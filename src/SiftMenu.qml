@@ -6,10 +6,16 @@ import QtQuick.Controls
 Menu {
     id: menu
     property bool alignLeading: false
+    // A submenu is placed beside its item by Menu itself.
+    property bool submenu: false
     readonly property bool rtl: Qt.application.layoutDirection === Qt.RightToLeft
 
-    x: !parent ? 0 : (alignLeading !== rtl) ? 0 : parent.width - width
-    y: parent ? parent.height + 4 : 0
+    onAboutToShow: {
+        if (submenu || !parent)
+            return
+        x = (alignLeading !== rtl) ? 0 : parent.width - width
+        y = parent.height + 4
+    }
     margins: 8
     padding: 4
     implicitWidth: Math.max(200, contentWidth + leftPadding + rightPadding)

@@ -62,21 +62,14 @@ ApplicationWindow {
         })
     }
 
+    // The reader jumps to the palette a theme change is heading to and lets
+    // its own CSS transition run alongside the window's crossfade.
     function applyReaderTheme() {
         if (!win.readerReady)
             return
-        readerView.runJavaScript("siftApplyTheme(" + JSON.stringify({
-            background: theme.background,
-            foreground: theme.foreground,
-            muted: theme.muted,
-            accent: theme.accent,
-            selection: theme.selection,
-            panel: theme.panel,
-            border: theme.border,
-            radius: theme.radius,
-            dark: theme.dark,
-            font: backend.readerFont.replace(/["\\]/g, "")
-        }) + ");")
+        const palette = Object.assign({}, theme.target)
+        palette.font = backend.readerFont.replace(/["\\]/g, "")
+        readerView.runJavaScript("siftApplyTheme(" + JSON.stringify(palette) + ");")
         readerView.runJavaScript("siftSetFontSize(" + backend.fontSize + ");")
     }
 
@@ -167,6 +160,25 @@ ApplicationWindow {
                         SiftMenuItem { text: qsTr("Copy Markdown"); shortcut: "E"; enabled: backend.hasArticle; onTriggered: backend.copyMarkdown() }
                         SiftMenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: { win.following = true; readerView.runJavaScript("siftResumeFollowing();") } }
                         SiftMenuSeparator { }
+                        SiftMenu {
+                            submenu: true
+                            title: qsTr("Appearance")
+                            Repeater {
+                                model: [
+                                    { value: "omarchy", label: qsTr("Follow Omarchy") },
+                                    { value: "system", label: qsTr("Follow system") },
+                                    { value: "light", label: qsTr("Light") },
+                                    { value: "dark", label: qsTr("Dark") }
+                                ]
+                                SiftMenuItem {
+                                    required property var modelData
+                                    text: modelData.label
+                                    checkable: true
+                                    checked: theme.appearance === modelData.value
+                                    onTriggered: backend.setAppearance(modelData.value)
+                                }
+                            }
+                        }
                         SiftMenuItem { text: qsTr("Keyboard shortcuts"); shortcut: "?"; onTriggered: win.helpOpen = true }
                         SiftMenuItem { text: qsTr("Settings…"); shortcut: "Ctrl+,"; onTriggered: settingsDialog.open() }
                     }
@@ -525,7 +537,7 @@ ApplicationWindow {
 
     Connections {
         target: theme
-        function onChanged() {
+        function onTargetChanged() {
             win.applyReaderTheme()
         }
     }

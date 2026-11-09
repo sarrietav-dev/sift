@@ -49,6 +49,49 @@ SiftDialog {
         ColumnLayout {
             width: scroll.availableWidth
             spacing: 9
+            Label { text: qsTr("Appearance"); color: theme.foreground; font.pixelSize: 13 }
+            // Applies at once, like the desktop's own theme picker.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 40
+                color: theme.panel
+                border.color: theme.border
+                radius: Math.min(5, theme.radius)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    spacing: 3
+                    Repeater {
+                        model: [
+                            { value: "omarchy", label: qsTr("Omarchy") },
+                            { value: "system", label: qsTr("System") },
+                            { value: "light", label: qsTr("Light") },
+                            { value: "dark", label: qsTr("Dark") }
+                        ]
+                        FlatButton {
+                            required property var modelData
+                            readonly property bool chosen: theme.appearance === modelData.value
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: modelData.label
+                            hint: qsTr("Appearance: %1").arg(modelData.label)
+                            font.pixelSize: 13
+                            primary: chosen
+                            onClicked: backend.setAppearance(modelData.value)
+                        }
+                    }
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                text: theme.appearance === "omarchy" ? qsTr("Follows the Omarchy theme as it changes.")
+                    : theme.appearance === "system" ? qsTr("Light or dark, as the system prefers.")
+                    : qsTr("Stays the same whatever the desktop theme.")
+                color: theme.muted
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+            }
+            Item { Layout.preferredHeight: 4 }
             Label { text: qsTr("Kokoro endpoint"); color: theme.foreground; font.pixelSize: 13 }
             SiftField { id: endpointField; Layout.fillWidth: true; placeholderText: "http://127.0.0.1:8880"; Accessible.name: qsTr("Kokoro endpoint") }
             Label { Layout.fillWidth: true; text: qsTr("The server must already be running. Save changes before testing the connection."); color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap }

@@ -74,6 +74,8 @@ void Backend::loadSettings() {
     const QString savedFont = m_library->setting("reader_font", "IBM Plex Serif");
     if (!savedFont.trimmed().isEmpty())
         m_readerFont = savedFont;
+    if (m_theme)
+        m_theme->setAppearance(m_library->setting("appearance", "omarchy"));
     m_kokoro->setEndpoint(m_library->setting("kokoro_url", "http://127.0.0.1:8880"));
     m_tts->setVoice(m_library->setting("voice", "af_heart"));
     m_tts->setSpeed(m_library->setting("speed", "1.0").toDouble());
@@ -412,6 +414,13 @@ void Backend::setReaderFont(const QString &family) {
     m_library->setSetting("reader_font", clean);
     emit readerFontChanged();
     emit settingsChanged();
+}
+
+void Backend::setAppearance(const QString &appearance) {
+    if (!m_theme)
+        return;
+    m_theme->setAppearance(appearance);
+    m_library->setSetting("appearance", m_theme->appearance());
 }
 
 void Backend::toggleCurrentRead() {
