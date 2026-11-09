@@ -43,7 +43,10 @@ ApplicationWindow {
     property bool focusMode: true
     property string toastText: ""
     property bool readerReady: false
+    property bool following: true
+    readonly property bool controlFocused: activeFocusItem && (activeFocusItem instanceof AbstractButton || activeFocusItem instanceof Slider || activeFocusItem instanceof TextInput || activeFocusItem instanceof ComboBox)
     property bool modalOpen: addDialog.visible || voiceDialog.visible || settingsDialog.visible || helpOpen
+        || sidebar.popupOpen || actionsMenu.visible || playerBar.popupOpen
 
     function showToast(message) {
         toastText = message
@@ -68,7 +71,7 @@ ApplicationWindow {
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: win.helpOpen = !win.helpOpen }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: Qt.quit() }
-    Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.playPause() }
+    Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.controlFocused; autoRepeat: false; onActivated: backend.playPause() }
     Shortcut { sequence: "["; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.previousSentence() }
     Shortcut { sequence: "]"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.nextSentence() }
     Shortcut { sequence: "-"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive; onActivated: backend.setSpeed(Math.max(0.5, backend.speed - 0.1)) }
@@ -81,15 +84,15 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+,"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: settingsDialog.open() }
     Shortcut {
         sequence: "J"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
-        onActivated: win.focusMode ? readerView.runJavaScript("window.scrollBy(0, 140)") : sidebar.moveSelection(1)
+        onActivated: win.focusMode ? readerView.runJavaScript("siftManualScroll(140)") : sidebar.moveSelection(1)
     }
     Shortcut {
         sequence: "K"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !sidebar.searchActive
-        onActivated: win.focusMode ? readerView.runJavaScript("window.scrollBy(0, -140)") : sidebar.moveSelection(-1)
+        onActivated: win.focusMode ? readerView.runJavaScript("siftManualScroll(-140)") : sidebar.moveSelection(-1)
     }
     Shortcut { sequence: "Return"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: sidebar.activateSelection() }
-    Shortcut { sequence: "PageDown"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("window.scrollBy(0, window.innerHeight * 0.85)") }
-    Shortcut { sequence: "PageUp"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("window.scrollBy(0, -window.innerHeight * 0.85)") }
+    Shortcut { sequence: "PageDown"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("siftManualScroll(window.innerHeight * 0.85)") }
+    Shortcut { sequence: "PageUp"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen; onActivated: readerView.runJavaScript("siftManualScroll(-window.innerHeight * 0.85)") }
     Shortcut { sequence: "Escape"; context: Qt.ApplicationShortcut; enabled: !win.modalOpen && !win.focusMode; onActivated: win.focusMode = true }
 
     ColumnLayout {
@@ -118,7 +121,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
-                    text: backend.hasArticle ? (backend.currentArticle.domain || "sift") : "sift"
+                    text: backend.busy ? qsTr("Adding page…") : backend.hasArticle ? (backend.currentArticle.domain || "sift") : "sift"
                     color: theme.muted
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -148,7 +151,7 @@ ApplicationWindow {
                         MenuItem { text: qsTr("Open original"); enabled: backend.hasArticle; onTriggered: backend.openOriginal() }
                         MenuItem { text: qsTr("Add to queue"); enabled: backend.hasArticle; onTriggered: backend.addCurrentToQueue() }
                         MenuItem { text: qsTr("Copy Markdown"); enabled: backend.hasArticle; onTriggered: backend.copyMarkdown() }
-                        MenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: readerView.runJavaScript("siftResumeFollowing();") }
+                        MenuItem { text: qsTr("Follow playback"); enabled: backend.hasArticle; onTriggered: { win.following = true; readerView.runJavaScript("siftResumeFollowing();") } }
                         MenuSeparator { }
                         MenuItem { text: qsTr("Settings…"); onTriggered: settingsDialog.open() }
                     }
@@ -205,6 +208,20 @@ ApplicationWindow {
             }
         }
 
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? 42 : 0
+            visible: backend.hasArticle && !backend.kokoroHealthy
+            color: theme.panel
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16; anchors.rightMargin: 12
+                Label { Layout.fillWidth: true; text: backend.kokoroStatus; color: theme.foreground; font.pixelSize: 12; elide: Text.ElideRight }
+                FlatButton { text: qsTr("Retry"); onClicked: backend.checkKokoro() }
+                FlatButton { text: qsTr("Settings"); onClicked: settingsDialog.open() }
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -252,7 +269,10 @@ ApplicationWindow {
 
                     onNavigationRequested: function(request) {
                         const target = request.url.toString()
-                        if (target.indexOf("https://sift.invalid/") === 0) {
+                        if (target.indexOf("https://sift.invalid/follow/paused") === 0) {
+                            request.action = WebEngineNavigationRequest.IgnoreRequest
+                            win.following = false
+                        } else if (target.indexOf("https://sift.invalid/") === 0) {
                             request.action = WebEngineNavigationRequest.IgnoreRequest
                             backend.handleReaderUrl(target)
                         } else if (target.indexOf("data:") !== 0 && target.indexOf("about:") !== 0) {
@@ -260,6 +280,17 @@ ApplicationWindow {
                             backend.openExternal(target)
                         }
                     }
+                }
+
+                FlatButton {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 18
+                    visible: backend.hasArticle && backend.playing && !win.following && !backend.busy
+                    text: qsTr("Return to playback")
+                    hint: qsTr("Follow the current sentence")
+                    background: Rectangle { color: theme.panel; border.color: theme.border; radius: Math.min(4, theme.radius) }
+                    onClicked: { win.following = true; readerView.runJavaScript("siftResumeFollowing();") }
                 }
 
                 Rectangle {
@@ -311,7 +342,7 @@ ApplicationWindow {
 
                 Rectangle {
                     anchors.fill: parent
-                    visible: backend.busy
+                    visible: backend.busy && !backend.hasArticle
                     color: Qt.rgba(0, 0, 0, 0.45)
 
                     ColumnLayout {
@@ -396,6 +427,7 @@ ApplicationWindow {
         target: backend
         function onReaderLoad(html, baseUrl) {
             win.readerReady = false
+            win.following = true
             readerView.loadHtml(html, baseUrl)
         }
         function onHighlightSentence(index) {

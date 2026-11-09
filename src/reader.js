@@ -14,8 +14,17 @@
     }
 
     var following = true;
-    window.addEventListener('wheel', function () { following = false; }, { passive: true });
-    window.addEventListener('touchmove', function () { following = false; }, { passive: true });
+    function stopFollowing() {
+        if (!following) return;
+        following = false;
+        window.location.href = 'https://sift.invalid/follow/paused';
+    }
+    window.addEventListener('wheel', stopFollowing, { passive: true });
+    window.addEventListener('touchmove', stopFollowing, { passive: true });
+    window.siftManualScroll = function (amount) {
+        stopFollowing();
+        window.scrollBy(0, amount);
+    };
     window.siftResumeFollowing = function () {
         following = true;
         var current = document.querySelector('.sift-sentence.sift-current');

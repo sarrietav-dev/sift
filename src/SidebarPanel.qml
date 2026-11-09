@@ -6,6 +6,8 @@ Rectangle {
     id: sidebar
     color: theme.background
     readonly property bool searchActive: false
+    readonly property bool popupOpen: clearDialog.visible || queueMenu.visible || itemMenuOpen
+    property bool itemMenuOpen: false
     signal addPage()
 
     function moveSelection(delta) {
@@ -14,8 +16,11 @@ Rectangle {
         queueList.positionViewAtIndex(queueList.currentIndex, ListView.Contain)
     }
     function activateSelection() {
-        if (queueList.currentIndex >= 0 && queueList.currentIndex < backend.queue.length)
-            backend.openArticle(backend.queue[queueList.currentIndex].id, false)
+        if (queueList.currentIndex >= 0 && queueList.currentIndex < backend.queue.length) {
+            const id = backend.queue[queueList.currentIndex].id
+            if (!backend.hasArticle || backend.currentArticle.id !== id)
+                backend.openArticle(id, false)
+        }
     }
 
     ColumnLayout {
@@ -63,7 +68,7 @@ Rectangle {
                 Rectangle { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; width: 2; height: 32; color: theme.accent; visible: row.current }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: { queueList.currentIndex = row.index; backend.openArticle(row.modelData.id, false) }
+                    onClicked: { queueList.currentIndex = row.index; sidebar.activateSelection() }
                 }
                 RowLayout {
                     anchors.fill: parent
@@ -80,6 +85,7 @@ Rectangle {
                         onClicked: itemMenu.open()
                         Menu {
                             id: itemMenu
+                            onVisibleChanged: sidebar.itemMenuOpen = visible
                             MenuItem { text: qsTr("Play"); onTriggered: backend.playQueueAt(row.index) }
                             MenuItem { text: qsTr("Move up"); enabled: row.index > 0; onTriggered: { const from = row.index; queueList.currentIndex = from - 1; backend.moveQueueItem(from, from - 1) } }
                             MenuItem { text: qsTr("Move down"); enabled: row.index < queueList.count - 1; onTriggered: { const from = row.index; queueList.currentIndex = from + 1; backend.moveQueueItem(from, from + 1) } }

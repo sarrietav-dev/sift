@@ -5,6 +5,7 @@ import QtQuick.Layouts
 Rectangle {
     id: player
     signal openVoice()
+    readonly property bool popupOpen: speedMenu.visible
     color: theme.background
     Layout.preferredHeight: 54
 
@@ -58,7 +59,8 @@ Rectangle {
             enabled: backend.sentenceCount > 0
             value: backend.currentSentence
             Accessible.name: qsTr("Sentence position")
-            onMoved: backend.seekSentence(Math.round(value))
+            onMoved: if (!pressed) backend.seekSentence(Math.round(value))
+            onPressedChanged: if (!pressed && enabled) backend.seekSentence(Math.round(value))
             background: Rectangle {
                 x: progress.leftPadding
                 y: progress.topPadding + progress.availableHeight / 2 - height / 2
