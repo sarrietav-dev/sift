@@ -1,0 +1,17 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="Main.qml">Main.qml</file>
+        <file alias="SidebarPanel.qml">SidebarPanel.qml</file>
+        <file alias="PlayerBar.qml">PlayerBar.qml</file>
+        <file alias="AddPageDialog.qml">AddPageDialog.qml</file>
+        <file alias="VoicePickerDialog.qml">VoicePickerDialog.qml</file>
+        <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
+        <file alias="TagsDialog.qml">TagsDialog.qml</file>
+        <file alias="PlaylistPickerDialog.qml">PlaylistPickerDialog.qml</file>
+        <file alias="ShortcutsOverlay.qml">ShortcutsOverlay.qml</file>
+        <file alias="reader.css">reader.css</file>
+        <file alias="reader.js">reader.js</file>
+        <file alias="defuddle.full.js">defuddle.full.js</file>
+        <file alias="i18n/en.json">i18n/en.json</file>
+    </qresource>
+</RCC>

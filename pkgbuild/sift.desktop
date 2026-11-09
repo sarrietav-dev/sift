@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=sift
+Comment=Read the web with Kokoro
+Exec=sift %u
+Icon=sift
+Terminal=false
+Categories=Network;News;AudioVideo;
+StartupWMClass=sift
