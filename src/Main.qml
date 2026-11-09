@@ -27,8 +27,11 @@ ApplicationWindow {
     property bool helpOpen: false
     property bool focusMode: true
     property string toastText: ""
+    // The reader page is loaded once; articles are rendered into it.
+    readonly property string readerShellUrl: "https://sift.invalid/reader"
     property bool readerReady: false
     property bool readerPainted: false
+    property var pendingRender: null
     property bool following: true
     readonly property bool controlFocused: activeFocusItem && (activeFocusItem instanceof AbstractButton || activeFocusItem instanceof Slider || activeFocusItem instanceof TextInput || activeFocusItem instanceof ComboBox)
     readonly property bool narrow: width < 900
@@ -41,8 +44,26 @@ ApplicationWindow {
         toastTimer.restart()
     }
 
+    function renderArticle(article) {
+        if (!win.readerReady) {
+            win.pendingRender = article
+            return
+        }
+        win.pendingRender = null
+        win.following = true
+        readerView.runJavaScript("siftRender(" + JSON.stringify(article) + ");", function(result) {
+            let sentences = []
+            try {
+                sentences = JSON.parse(result)
+            } catch (error) {
+                sentences = []
+            }
+            backend.sentencesReady(article.token, sentences)
+        })
+    }
+
     function applyReaderTheme() {
-        if (!backend.hasArticle || !win.readerReady)
+        if (!win.readerReady)
             return
         readerView.runJavaScript("siftApplyTheme(" + JSON.stringify({
             background: theme.background,
@@ -53,6 +74,7 @@ ApplicationWindow {
             panel: theme.panel,
             border: theme.border,
             radius: theme.radius,
+            dark: theme.dark,
             font: backend.readerFont.replace(/["\\]/g, "")
         }) + ");")
         readerView.runJavaScript("siftSetFontSize(" + backend.fontSize + ");")
@@ -236,27 +258,34 @@ ApplicationWindow {
                     id: readerView
                     objectName: "readerView"
                     anchors.fill: parent
-                    visible: backend.hasArticle
                     focus: false
                     backgroundColor: theme.background
                     settings.javascriptEnabled: true
                     settings.localContentCanAccessRemoteUrls: true
                     settings.localContentCanAccessFileUrls: true
 
+                    Component.onCompleted: loadHtml(backend.readerShell(), win.readerShellUrl)
+
                     onLoadingChanged: function(request) {
                         if (request.status === WebEngineView.LoadSucceededStatus) {
                             win.readerReady = true
-                            wrapTimer.restart()
+                            win.applyReaderTheme()
                             paintTimer.restart()
+                            if (win.pendingRender)
+                                win.renderArticle(win.pendingRender)
                         } else if (request.status === WebEngineView.LoadFailedStatus) {
                             win.readerReady = false
-                            backend.sentencesReady([])
+                            if (win.pendingRender)
+                                backend.sentencesReady(win.pendingRender.token, [])
+                            win.pendingRender = null
                         }
                     }
 
                     onNavigationRequested: function(request) {
                         const target = request.url.toString()
-                        if (target.indexOf("https://sift.invalid/follow/paused") === 0) {
+                        if (target === win.readerShellUrl) {
+                            return
+                        } else if (target.indexOf("https://sift.invalid/follow/paused") === 0) {
                             request.action = WebEngineNavigationRequest.IgnoreRequest
                             win.following = false
                         } else if (target.indexOf("https://sift.invalid/") === 0) {
@@ -430,32 +459,12 @@ ApplicationWindow {
         }
     }
 
-    Timer {
-        id: wrapTimer
-        interval: 140
-        repeat: false
-        onTriggered: {
-            if (!backend.hasArticle)
-                return
-            readerView.runJavaScript("siftWrapSentences();", function(result) {
-                let sentences = []
-                try {
-                    sentences = JSON.parse(result)
-                } catch (error) {
-                    sentences = []
-                }
-                backend.sentencesReady(sentences)
-                win.applyReaderTheme()
-            })
-        }
-    }
-
     // LoadSucceeded precedes the first painted frame by a moment. Keep the
     // window-coloured cover up a little longer so the black surface never
-    // shows between the two.
+    // shows between the two. Only the shell loads, so this happens once.
     Timer {
         id: paintTimer
-        interval: 500
+        interval: 300
         repeat: false
         onTriggered: win.readerPainted = true
     }
@@ -469,11 +478,8 @@ ApplicationWindow {
 
     Connections {
         target: backend
-        function onReaderLoad(html, baseUrl) {
-            win.readerReady = false
-            win.readerPainted = false
-            win.following = true
-            readerView.loadHtml(html, baseUrl)
+        function onReaderRender(article) {
+            win.renderArticle(article)
         }
         function onHighlightSentence(index) {
             readerView.runJavaScript("siftSetCurrent(" + index + ");")
@@ -483,13 +489,10 @@ ApplicationWindow {
             win.showToast(message)
         }
         function onFontSizeChanged() {
-            if (backend.hasArticle && win.readerReady)
+            if (win.readerReady)
                 readerView.runJavaScript("siftSetFontSize(" + backend.fontSize + ");")
         }
         function onReaderFontChanged() {
-            win.applyReaderTheme()
-        }
-        function onCurrentArticleChanged() {
             win.applyReaderTheme()
         }
     }

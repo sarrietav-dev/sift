@@ -51,13 +51,15 @@ private slots:
         QVERIFY(!engine.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         QVERIFY(window);
-        QSignalSpy readerLoad(&backend, &Backend::readerLoad);
+        QVERIFY(backend.readerShell().contains("--sift-body-font:"));
+        QVERIFY(backend.readerShell().contains("script-src 'nonce-"));
+        QSignalSpy readerRender(&backend, &Backend::readerRender);
         backend.openArticle(id, false);
-        QCOMPARE(readerLoad.size(), 1);
-        const QString html = readerLoad.first().at(0).toString();
-        QVERIFY(html.contains("<h1 id=\"sift-title\">The Quiet Art of Reading</h1>"));
-        QVERIFY(html.contains("By Example Author"));
-        QVERIFY(html.contains("--sift-body-font:"));
+        QCOMPARE(readerRender.size(), 1);
+        const QVariantMap payload = readerRender.first().at(0).toMap();
+        QCOMPARE(payload.value("title").toString(), QString("The Quiet Art of Reading"));
+        QCOMPARE(payload.value("meta").toList().first().toMap().value("text").toString(), QString("Example Author"));
+        QVERIFY(payload.value("html").toString().contains("A small practice"));
         QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 0, 15000);
         QTRY_VERIFY_WITH_TIMEOUT(window->property("readerPainted").toBool(), 5000);
         QObject *cover = window->findChild<QObject *>("readerCover");
@@ -73,6 +75,21 @@ private slots:
         QVERIFY(!screenshot.isNull());
         if (qEnvironmentVariableIsSet("SIFT_GUI_SCREENSHOT"))
             QVERIFY(screenshot.save(qEnvironmentVariable("SIFT_GUI_SCREENSHOT")));
+
+        // A second article renders into the same page without a reload.
+        QString secondId;
+        {
+            Library library;
+            QVariantMap second{{"url", "https://example.com/second"}, {"canonicalUrl", "https://example.com/second"},
+                               {"title", "Second Thoughts"}, {"domain", "example.com"}, {"language", "en"},
+                               {"wordCount", 6}, {"contentHtml", "<p>One sentence here. Another one there.</p>"},
+                               {"markdown", "x"}, {"contentText", "x"}};
+            QVERIFY2(library.saveArticle(second, &secondId, &error), qPrintable(error));
+        }
+        backend.openArticle(secondId, false);
+        QTRY_COMPARE_WITH_TIMEOUT(backend.sentenceCount(), 2, 5000);
+        backend.openArticle(id, false);
+        QTRY_VERIFY_WITH_TIMEOUT(backend.sentenceCount() > 2, 5000);
 
         backend.seekSentence(1);
         QCOMPARE(backend.currentSentence(), 1);

@@ -84,7 +84,8 @@ public:
     Q_INVOKABLE void addUrl(const QString &url);
     Q_INVOKABLE void openUrl(const QString &url, bool autoplay = true);
     Q_INVOKABLE void openArticle(const QString &id, bool autoplay = false);
-    Q_INVOKABLE void sentencesReady(const QVariantList &sentences);
+    Q_INVOKABLE QString readerShell() const;
+    Q_INVOKABLE void sentencesReady(int token, const QVariantList &sentences);
     Q_INVOKABLE void handleReaderUrl(const QString &url);
     Q_INVOKABLE void openExternal(const QString &url);
     Q_INVOKABLE void openOriginal();
@@ -163,7 +164,7 @@ signals:
     void bufferingChanged();
     void currentSentenceChanged();
     void sentenceCountChanged();
-    void readerLoad(const QString &html, const QString &baseUrl);
+    void readerRender(const QVariantMap &article);
     void highlightSentence(int index);
     void toast(const QString &message);
 
@@ -181,7 +182,8 @@ private:
     void extracted(const QVariantMap &article);
     void extractionFailed(const QString &error);
     void articleFinished();
-    QString buildReaderHtml(const QVariantMap &article) const;
+    QVariantMap readerPayload(const QVariantMap &article) const;
+    static QString formatPublished(const QString &published);
     static QString sanitizeHtml(const QString &html);
     static QString readerDirection(const QString &language);
     static QStringList sentenceTexts(const QVariantList &sentences, QList<int> *blocks = nullptr);
@@ -210,6 +212,7 @@ private:
     QString m_readerFont = "IBM Plex Serif";
     int m_queueIndex = -1;
     int m_startSentence = 0;
+    int m_renderToken = 0;
     bool m_fromQueue = false;
     bool m_autoplayAfterWrap = false;
     bool m_autoplayAfterExtract = false;

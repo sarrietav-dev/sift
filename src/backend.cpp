@@ -11,11 +11,15 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QDate>
+#include <QDateTime>
 #include <QFontDatabase>
+#include <QLocale>
 #include <QGuiApplication>
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QUuid>
 
 Backend::Backend(Theme *theme, QObject *parent)
     : QObject(parent),
@@ -226,19 +230,20 @@ void Backend::openArticle(const QString &id, bool autoplay) {
     m_startSentence = readState == 2 ? 0 : article.value("lastSentence").toInt();
     m_autoplayAfterWrap = autoplay;
     m_wrapping = true;
+    ++m_renderToken;
     if (readState == 0) {
         m_library->setReadState(id, 1);
         m_current["readState"] = 1;
     }
     emit currentArticleChanged();
 
-    const QString html = buildReaderHtml(article);
-    if (html.isEmpty()) {
+    const QVariantMap payload = readerPayload(article);
+    if (payload.isEmpty()) {
         m_wrapping = false;
         setError(tr("Could not build the reader view."));
         return;
     }
-    emit readerLoad(html, article.value("url").toString());
+    emit readerRender(payload);
     setStatus(tr("Ready"));
 }
 
@@ -256,8 +261,9 @@ QStringList Backend::sentenceTexts(const QVariantList &sentences, QList<int> *bl
     return texts;
 }
 
-void Backend::sentencesReady(const QVariantList &sentences) {
-    if (!m_wrapping)
+void Backend::sentencesReady(int token, const QVariantList &sentences) {
+    // A render that finishes after a newer article was opened is stale.
+    if (!m_wrapping || token != m_renderToken)
         return;
     m_wrapping = false;
     QList<int> blocks;
@@ -674,12 +680,57 @@ QString Backend::sanitizeHtml(const QString &input) {
     return html;
 }
 
-QString Backend::buildReaderHtml(const QVariantMap &article) const {
+QString Backend::formatPublished(const QString &published) {
+    const QString value = published.trimmed();
+    if (value.isEmpty())
+        return {};
+    QDate date = QDateTime::fromString(value, Qt::ISODate).date();
+    if (!date.isValid())
+        date = QDate::fromString(value.left(10), Qt::ISODate);
+    if (!date.isValid())
+        return value;
+    // The locale's long format without the weekday reads like a byline.
+    QString format = QLocale().dateFormat(QLocale::LongFormat);
+    format.remove(QRegularExpression("dddd[,.]?\\s*"));
+    return QLocale().toString(date, format.trimmed());
+}
+
+QVariantMap Backend::readerPayload(const QVariantMap &article) const {
     const QString id = article.value("id").toString();
     const QString content = sanitizeHtml(m_library->articleHtml(id));
     if (content.trimmed().isEmpty())
         return {};
 
+    const QString language = article.value("language").toString().isEmpty()
+        ? QStringLiteral("en") : article.value("language").toString();
+    QString safeLanguage = language;
+    safeLanguage.remove(QRegularExpression("[^A-Za-z0-9-]"));
+
+    QVariantList meta;
+    auto addMeta = [&meta](const QString &text, const QString &kind) {
+        if (!text.trimmed().isEmpty())
+            meta << QVariantMap{{"text", text.trimmed()}, {"kind", kind}};
+    };
+    addMeta(article.value("author").toString(), "author");
+    addMeta(formatPublished(article.value("published").toString()), "date");
+    addMeta(article.value("domain").toString(), "domain");
+    const int words = article.value("wordCount").toInt();
+    if (words > 0)
+        addMeta(tr("%1 min read").arg(qMax(1, (words + 219) / 220)), "time");
+
+    return QVariantMap{
+        {"token", m_renderToken},
+        {"id", id},
+        {"title", article.value("title").toString()},
+        {"meta", meta},
+        {"lang", safeLanguage.isEmpty() ? QStringLiteral("en") : safeLanguage},
+        {"dir", readerDirection(language)},
+        {"baseUrl", article.value("url").toString()},
+        {"html", content},
+    };
+}
+
+QString Backend::readerShell() const {
     QFile cssFile(":/reader.css");
     QFile jsFile(":/reader.js");
     if (!cssFile.open(QIODevice::ReadOnly) || !jsFile.open(QIODevice::ReadOnly))
@@ -695,25 +746,11 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
     const QString panel = m_theme ? m_theme->panel() : "#222222";
     const QString border = m_theme ? m_theme->borderColor() : "#333333";
     const int radius = m_theme ? m_theme->radius() : 0;
-
-    const QString language = article.value("language").toString().isEmpty()
-        ? QStringLiteral("en") : article.value("language").toString();
-    const QString dir = readerDirection(language);
-    const QString safeLanguage = QString(language).remove(QRegularExpression("[^A-Za-z0-9-]"));
-    const QString baseUrl = article.value("url").toString().toHtmlEscaped();
-    const QString domain = article.value("domain").toString();
-    const int words = article.value("wordCount").toInt();
-    const int minutes = qMax(1, (words + 219) / 220);
-    const QString meta = tr("%1 · %2 min read").arg(domain).arg(minutes).toHtmlEscaped();
-    const QString author = article.value("author").toString().trimmed();
-    const QString published = article.value("published").toString().trimmed();
-    const QString byline = (author.isEmpty() ? QString() : tr("By %1").arg(author))
-        + (!author.isEmpty() && !published.isEmpty() ? QStringLiteral(" · ") : QString())
-        + published;
+    const bool dark = m_theme ? m_theme->dark() : true;
 
     QString cssFont = m_readerFont;
     cssFont.remove(QRegularExpression("[\\\";{}]"));
-    const QString bodyFont = QStringLiteral("\"%1\", \"Liberation Serif\", Georgia, serif").arg(cssFont);
+    const QString bodyFont = QStringLiteral("\"%1\", system-ui, sans-serif").arg(cssFont);
     const QString variables = QStringLiteral(
         ":root{--sift-bg:%1;--sift-fg:%2;--sift-muted:%3;--sift-accent:%4;"
         "--sift-selection:%5;--sift-panel:%6;--sift-border:%7;--sift-radius:%8px;"
@@ -723,18 +760,22 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
         .arg(m_fontSize)
         .arg(bodyFont);
 
+    // Only the shell's own script carries the nonce. Anything inline that
+    // slips through sanitising, such as an event handler attribute, cannot
+    // run. Qt's runJavaScript is not subject to the page's policy.
+    const QString nonce = QUuid::createUuid().toString(QUuid::Id128);
     return QStringLiteral(
-        "<!doctype html><html lang=\"%1\" dir=\"%2\"><head><meta charset=\"utf-8\">"
+        "<!doctype html><html lang=\"en\" dir=\"ltr\" class=\"%1\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<meta name=\"referrer\" content=\"no-referrer\">"
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; "
         "img-src http: https: data:; media-src http: https: data:; style-src 'unsafe-inline'; "
-        "script-src 'unsafe-inline'; font-src data:; object-src 'none'; frame-src 'none'; "
+        "script-src 'nonce-%2'; font-src data:; object-src 'none'; frame-src 'none'; "
         "form-action 'none'; connect-src 'none';\">"
-        "<base href=\"%3\"><style>%4</style><style>%5</style></head>"
-        "<body><main id=\"sift-wrap\"><header id=\"sift-header\"><div id=\"sift-meta\">%6</div>"
-        "<h1 id=\"sift-title\">%7</h1><div id=\"sift-byline\">%8</div></header>"
-        "<article id=\"sift-content\">%9</article></main>"
-        "<script>%10</script></body></html>")
-        .arg(safeLanguage, dir, baseUrl, variables, css, meta,
-             article.value("title").toString().toHtmlEscaped(), byline.toHtmlEscaped(), content, js);
+        "<style>%4</style><style>%3</style></head>"
+        "<body><main id=\"sift-wrap\"><header id=\"sift-header\">"
+        "<h1 id=\"sift-title\"></h1><div id=\"sift-meta\"></div></header>"
+        "<article id=\"sift-content\"></article></main>"
+        "<script nonce=\"%2\">%5</script></body></html>")
+        .arg(dark ? "theme-dark" : "theme-light", nonce, variables, css, js);
 }

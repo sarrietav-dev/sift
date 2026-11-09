@@ -99,7 +99,7 @@ URL → hidden Qt WebEngine → Defuddle → HTML + Markdown + metadata
                                           │
                     SQLite index + Markdown + article snapshot
                                           │
-             visible Qt WebEngine reader with sentence spans
+   one persistent Qt WebEngine reader page; each article renders in place
                                           │
         Kokoro /v1/audio/speech → MP3 cache → QMediaPlayer
 ```
@@ -127,7 +127,8 @@ an isolated temporary home, checks sentence seeking and the queue, and opens
 the main dialogs. The GUI test disables the Chromium sandbox for that isolated
 test process; the application does not disable it.
 
-The app scaffolding follows Omacut and Monologue (MIT, David Heinemeier
+The reader's typography follows Obsidian Web Clipper's reader view (MIT,
+Obsidian). The app scaffolding follows Omacut and Monologue (MIT, David Heinemeier
 Hansson). Defuddle is MIT, copyright Steph Ango; its license is in
 `LICENSES/defuddle.txt`.
 
