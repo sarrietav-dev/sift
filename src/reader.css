@@ -48,6 +48,13 @@ body {
 }
 
 #sift-header { margin-bottom: 3rem; }
+#sift-byline {
+    margin-top: 1rem;
+    color: var(--sift-muted);
+    font-family: "Noto Sans", "Liberation Sans", sans-serif;
+    font-size: 0.8rem;
+}
+#sift-byline:empty { display: none; }
 #sift-title {
     margin: 0;
     font-size: clamp(2rem, 4vw, 3rem);
@@ -221,6 +228,11 @@ mark {
     background: var(--sift-selection);
     color: var(--sift-fg);
 }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--sift-bg); }
+::-webkit-scrollbar-thumb { background: var(--sift-border); }
+::-webkit-scrollbar-thumb:hover { background: var(--sift-muted); }
 
 #sift-wrap .sift-footnotes,
 #sift-wrap [data-footnotes],

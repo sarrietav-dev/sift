@@ -681,6 +681,11 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
     const int words = article.value("wordCount").toInt();
     const int minutes = qMax(1, (words + 219) / 220);
     const QString meta = tr("%1 · %2 min read").arg(domain).arg(minutes).toHtmlEscaped();
+    const QString author = article.value("author").toString().trimmed();
+    const QString published = article.value("published").toString().trimmed();
+    const QString byline = (author.isEmpty() ? QString() : tr("By %1").arg(author))
+        + (!author.isEmpty() && !published.isEmpty() ? QStringLiteral(" · ") : QString())
+        + published;
 
     const QString variables = QStringLiteral(
         ":root{--sift-bg:%1;--sift-fg:%2;--sift-muted:%3;--sift-accent:%4;"
@@ -699,9 +704,9 @@ QString Backend::buildReaderHtml(const QVariantMap &article) const {
         "form-action 'none'; connect-src 'none';\">"
         "<base href=\"%3\"><style>%4</style><style>%5</style></head>"
         "<body><main id=\"sift-wrap\"><header id=\"sift-header\"><div id=\"sift-meta\">%6</div>"
-        "<h1 id=\"sift-title\">%7</h1></header>"
-        "<article id=\"sift-content\">%8</article></main>"
-        "<script>%9</script></body></html>")
+        "<h1 id=\"sift-title\">%7</h1><div id=\"sift-byline\">%8</div></header>"
+        "<article id=\"sift-content\">%9</article></main>"
+        "<script>%10</script></body></html>")
         .arg(safeLanguage, dir, baseUrl, variables, css, meta,
-             article.value("title").toString().toHtmlEscaped(), content, js);
+             article.value("title").toString().toHtmlEscaped(), byline.toHtmlEscaped(), content, js);
 }
