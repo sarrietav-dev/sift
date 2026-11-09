@@ -298,6 +298,7 @@ int runGui(const Cli &cli, int argc, char **argv) {
         return 1;
 
     QQuickWindow *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    backend.watchWindow(window);
 
     QLocalServer server;
     QLocalServer::removeServer(socketName());

@@ -11,7 +11,8 @@ HEADERS += \
     src/library.h \
     src/theme.h \
     src/translator.h \
-    src/ttsengine.h
+    src/ttsengine.h \
+    src/windowwatcher.h
 
 SOURCES += \
     src/main.cpp \
@@ -21,6 +22,7 @@ SOURCES += \
     src/library.cpp \
     src/theme.cpp \
     src/translator.cpp \
-    src/ttsengine.cpp
+    src/ttsengine.cpp \
+    src/windowwatcher.cpp
 
 RESOURCES += src/resources.qrc

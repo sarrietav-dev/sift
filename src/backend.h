@@ -9,6 +9,7 @@ class Kokoro;
 class Library;
 class Theme;
 class TtsEngine;
+class QWindow;
 
 // The app's coordinator: extracts pages, stores them, drives the reader, and
 // owns the playback queue and playlists.
@@ -48,6 +49,9 @@ class Backend : public QObject {
 
 public:
     explicit Backend(Theme *theme, QObject *parent = nullptr);
+
+    // Asks the reader to repaint whenever the window comes back into view.
+    void watchWindow(QWindow *window);
 
     QVariantList articles() const { return m_articles; }
     QVariantList playlists() const { return m_playlists; }
@@ -165,6 +169,7 @@ signals:
     void currentSentenceChanged();
     void sentenceCountChanged();
     void readerRender(const QVariantMap &article);
+    void readerNeedsRepaint();
     void highlightSentence(int index);
     void toast(const QString &message);
 

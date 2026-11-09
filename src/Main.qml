@@ -469,6 +469,21 @@ ApplicationWindow {
         onTriggered: win.readerPainted = true
     }
 
+    // A window returning from another workspace may still be waiting for its
+    // first frame, so ask again shortly after as well.
+    Timer {
+        id: repaintTimer
+        property int remaining: 0
+        interval: 120
+        repeat: true
+        onTriggered: {
+            if (win.readerReady)
+                readerView.runJavaScript("siftRepaint();")
+            if (--remaining <= 0)
+                stop()
+        }
+    }
+
     Timer {
         id: toastTimer
         interval: 2800
@@ -478,6 +493,12 @@ ApplicationWindow {
 
     Connections {
         target: backend
+        function onReaderNeedsRepaint() {
+            if (win.readerReady)
+                readerView.runJavaScript("siftRepaint();")
+            repaintTimer.remaining = 3
+            repaintTimer.restart()
+        }
         function onReaderRender(article) {
             win.renderArticle(article)
         }

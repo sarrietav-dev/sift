@@ -264,6 +264,16 @@
         return true;
     };
 
+    // Forces the compositor to produce a fresh frame. WebEngine can drop its
+    // last frame while the window is hidden and only draws again when
+    // something on the page changes.
+    window.siftRepaint = function () {
+        var style = document.documentElement.style;
+        style.opacity = '0.999';
+        requestAnimationFrame(function () { style.opacity = ''; });
+        return true;
+    };
+
     window.siftSetFontSize = function (size) {
         document.documentElement.style.setProperty('--sift-font-size', size + 'px');
         return true;

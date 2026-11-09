@@ -5,6 +5,7 @@
 #include "library.h"
 #include "theme.h"
 #include "ttsengine.h"
+#include "windowwatcher.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -60,6 +61,12 @@ Backend::Backend(Theme *theme, QObject *parent)
     refreshAll();
     m_kokoro->checkHealth();
     m_kokoro->refreshVoices();
+}
+
+void Backend::watchWindow(QWindow *window) {
+    auto *watcher = new WindowWatcher(this);
+    watcher->setWindow(window);
+    connect(watcher, &WindowWatcher::shown, this, &Backend::readerNeedsRepaint);
 }
 
 void Backend::loadSettings() {
