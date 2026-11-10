@@ -365,7 +365,7 @@ int runAdd(const Cli &cli, int argc, char **argv) {
     QtWebEngineQuick::initialize();
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
-    QCoreApplication::setApplicationVersion("0.1.0");
+    QCoreApplication::setApplicationVersion("0.1.1");
 
     Library library;
     QString id;
@@ -390,7 +390,7 @@ int runAdd(const Cli &cli, int argc, char **argv) {
 int runGui(const Cli &cli, int argc, char **argv) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("sift");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion("0.1.1");
     app.setDesktopFileName("sift");
     app.setWindowIcon(QIcon::fromTheme("sift"));
 
@@ -490,7 +490,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (cli.command == "version") {
-        QTextStream(stdout) << "sift 0.1.0\n";
+        QTextStream(stdout) << "sift 0.1.1\n";
         return 0;
     }
     if (cli.command == "list")
