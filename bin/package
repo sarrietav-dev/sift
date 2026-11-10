@@ -1,0 +1,30 @@
+#!/bin/sh
+# Builds the prebuilt tarball that sift-reader-bin installs and prints its
+# sha256. Attach the tarball to the GitHub release for the version, then put
+# the hash in pkgbuild/aur-bin/PKGBUILD.
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+VERSION="$(sed -n 's/^pkgver=//p' "$ROOT/pkgbuild/aur/PKGBUILD")"
+ARCH="$(uname -m)"
+NAME="sift-$VERSION-$ARCH"
+TARBALL="$ROOT/dist/$NAME.tar.zst"
+STAGE="$ROOT/build/package/$NAME"
+
+"$ROOT/bin/build"
+
+rm -rf "$STAGE"
+mkdir -p "$STAGE/LICENSES"
+install -m755 "$ROOT/build/sift" "$STAGE/sift"
+install -m644 "$ROOT/LICENSE" "$STAGE/LICENSE"
+install -m644 "$ROOT/LICENSES/defuddle.txt" "$STAGE/LICENSES/defuddle.txt"
+install -m644 "$ROOT/pkgbuild/sift.desktop" "$STAGE/sift.desktop"
+install -m644 "$ROOT/pkgbuild/sift.svg" "$STAGE/sift.svg"
+strip --strip-unneeded "$STAGE/sift"
+
+mkdir -p "$ROOT/dist"
+rm -f "$TARBALL"
+tar -C "$ROOT/build/package" --zstd -cf "$TARBALL" "$NAME"
+
+echo "Packaged $TARBALL"
+sha256sum "$TARBALL"

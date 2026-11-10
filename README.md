@@ -51,12 +51,18 @@ for [Omarchy](https://omarchy.org).
 ### From the AUR
 
 ```sh
-yay -S sift-reader
+yay -S sift-reader       # builds from source
+yay -S sift-reader-bin   # prebuilt x86_64 binary
 ```
+
+`sift-reader` compiles on your machine and is available for `x86_64` and
+`aarch64`. `sift-reader-bin` is the same program, already built and stripped,
+for `x86_64` only; it skips Qt's development packages and the compile. The two
+provide and conflict with each other, so pacman will not install both.
 
 The package is called **`sift-reader`**, not `sift`: `sift` on the AUR is an
 unrelated grep tool, and a package name can only be used once. The command is
-still `sift`. `sift-reader` declares a conflict with `sift`, `sift-bin`, and
+still `sift`. Both packages declare a conflict with `sift`, `sift-bin`, and
 `sift-git`, which all ship `/usr/bin/sift`, so pacman will not quietly swap
 your reader for the grep tool.
 
@@ -202,24 +208,38 @@ npm run render    # renders out/sift.mp4
 <details>
 <summary>Releasing</summary>
 
-Bump `pkgver` and `pkgrel` in both `pkgbuild/PKGBUILD` and
-`pkgbuild/aur/PKGBUILD`, tag the release, then push to the AUR:
+Bump `pkgver` (and reset `pkgrel` to 1) in `src/main.cpp`,
+`pkgbuild/PKGBUILD`, `pkgbuild/aur/PKGBUILD`, and
+`pkgbuild/aur-bin/PKGBUILD`, then tag the release, attach the prebuilt
+tarball, and push both AUR packages:
 
 ```sh
-git tag v0.1.1 && git push origin v0.1.1
-
-git clone ssh://aur@aur.archlinux.org/sift-reader.git /tmp/sift-reader-aur
-cd pkgbuild/aur
-makepkg --printsrcinfo > .SRCINFO
-cp PKGBUILD .SRCINFO /tmp/sift-reader-aur/
-cd /tmp/sift-reader-aur
-git add PKGBUILD .SRCINFO
-git commit -m "sift-reader $(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
-git push
+git tag v0.1.2 && git push origin v0.1.2
+./bin/package     # writes dist/sift-0.1.2-x86_64.tar.zst and prints its sha256
+gh release create v0.1.2 dist/sift-0.1.2-x86_64.tar.zst --title "sift 0.1.2"
 ```
 
-The first push creates the package on the AUR. `pkgbuild/aur/PKGBUILD` builds
-from the `v$pkgver` tag, so the tag must exist before the AUR can build it.
+Put the printed sha256 in `pkgbuild/aur-bin/PKGBUILD`, and make sure the
+release exists before you push it, or the AUR will not be able to fetch it:
+
+```sh
+aur_push() { # package-name package-dir
+  version=$(sed -n 's/^pkgver=//p' "$2/PKGBUILD")
+  (cd "$2" && makepkg --printsrcinfo > .SRCINFO)
+  rm -rf "/tmp/$1-aur"
+  git clone -q "ssh://aur@aur.archlinux.org/$1.git" "/tmp/$1-aur"
+  cp "$2/PKGBUILD" "$2/.SRCINFO" "/tmp/$1-aur/"
+  git -C "/tmp/$1-aur" add PKGBUILD .SRCINFO
+  git -C "/tmp/$1-aur" commit -m "$1 $version"
+  git -C "/tmp/$1-aur" push
+}
+
+aur_push sift-reader pkgbuild/aur
+aur_push sift-reader-bin pkgbuild/aur-bin
+```
+
+The first push creates a package on the AUR. Both PKGBUILDs build or fetch
+from the `v$pkgver` tag, so the tag and its release asset must exist first.
 
 </details>
 
