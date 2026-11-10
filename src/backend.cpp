@@ -304,7 +304,9 @@ void Backend::sentencesReady(int token, const QVariantList &sentences) {
         setError(tr("That page has no readable sentences."));
         return;
     }
-    m_tts->setSentences(texts, blocks, m_startSentence);
+    m_tts->setSentences(texts, blocks, m_startSentence,
+                        TtsEngine::announcement(m_current.value("title").toString(),
+                                                m_current.value("author").toString()));
     if (m_autoplayAfterWrap) {
         m_autoplayAfterWrap = false;
         m_tts->play();

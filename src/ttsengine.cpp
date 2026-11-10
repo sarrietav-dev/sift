@@ -25,10 +25,20 @@ TtsEngine::TtsEngine(Kokoro *kokoro, QObject *parent)
 
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status) {
         if (status == QMediaPlayer::EndOfMedia) {
-            if (m_playing)
+            if (m_sourceIndex == IntroIndex) {
+                m_sourceIndex = -1;
+                m_introPending = false;
+                if (m_playing) {
+                    playCurrentIfReady();
+                    prefetch();
+                } else {
+                    setBuffering(false);
+                }
+            } else if (m_playing) {
                 next();
-            else
+            } else {
                 setBuffering(false);
+            }
         } else if (status == QMediaPlayer::InvalidMedia) {
             setBuffering(false);
             setPlaying(false);
@@ -90,7 +100,8 @@ QString TtsEngine::cachePath(const QString &text) const {
     return directory + "/" + hash + ".mp3";
 }
 
-void TtsEngine::setSentences(const QStringList &sentences, const QList<int> &blocks, int startSentence) {
+void TtsEngine::setSentences(const QStringList &sentences, const QList<int> &blocks, int startSentence,
+                             const QString &intro) {
     ++m_generation;
     m_player->stop();
     m_sentences.clear();
@@ -107,6 +118,11 @@ void TtsEngine::setSentences(const QStringList &sentences, const QList<int> &blo
     m_errors.clear();
     m_sourceIndex = -1;
     m_current = m_sentences.isEmpty() ? 0 : qBound(0, startSentence, m_sentences.size() - 1);
+    // Announcing the article only makes sense from its beginning; picking up
+    // where playback left off goes straight to the sentence.
+    m_intro = cleanForSpeech(intro);
+    m_introPending = !m_intro.isEmpty() && m_current == 0;
+    m_introSynthesizing = false;
     setPlaying(false);
     setBuffering(false);
     setStatus(m_sentences.isEmpty() ? tr("No readable text.") : tr("Ready"));
@@ -156,8 +172,13 @@ void TtsEngine::invalidateAudio() {
     m_ready.clear();
     m_pending.clear();
     m_errors.clear();
+    m_introSynthesizing = false;
     setBuffering(false);
-    if (m_playing)
+    if (!m_playing)
+        return;
+    if (m_introPending)
+        playIntro();
+    else
         playCurrentIfReady();
 }
 
@@ -166,14 +187,20 @@ void TtsEngine::play() {
         setStatus(tr("There is nothing to read yet."));
         return;
     }
-    if (m_player->playbackState() == QMediaPlayer::PausedState
-        && m_sourceIndex == m_current && !m_player->source().isEmpty()) {
+    const bool pausedIntro = m_introPending && m_sourceIndex == IntroIndex;
+    if (m_player->playbackState() == QMediaPlayer::PausedState && !m_player->source().isEmpty()
+        && (pausedIntro || m_sourceIndex == m_current)) {
         setPlaying(true);
         m_player->play();
         setStatus(tr("Reading"));
         return;
     }
     setPlaying(true);
+    if (m_introPending) {
+        playIntro();
+        prefetch();
+        return;
+    }
     playCurrentIfReady();
     prefetch();
 }
@@ -195,6 +222,7 @@ void TtsEngine::toggle() {
 void TtsEngine::stop() {
     setPlaying(false);
     m_sourceIndex = -1;
+    m_introPending = false;
     m_player->stop();
     setBuffering(false);
     setStatus(tr("Ready"));
@@ -203,6 +231,7 @@ void TtsEngine::stop() {
 void TtsEngine::next() {
     if (m_sentences.isEmpty())
         return;
+    m_introPending = false;
     if (m_current + 1 >= m_sentences.size()) {
         setPlaying(false);
         m_player->stop();
@@ -223,6 +252,7 @@ void TtsEngine::next() {
 void TtsEngine::previous() {
     if (m_sentences.isEmpty())
         return;
+    m_introPending = false;
     if (m_current == 0) {
         m_player->stop();
         setBuffering(false);
@@ -247,6 +277,7 @@ void TtsEngine::playFrom(int index) {
     m_pending.clear();
     m_errors.clear();
     m_sourceIndex = -1;
+    m_introPending = false;
     m_player->stop();
     m_current = target;
     setPlaying(true);
@@ -261,7 +292,7 @@ void TtsEngine::playCurrentIfReady() {
         return;
     const QString path = cachePath(m_sentences.at(m_current));
     if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
-        playFile(path);
+        playFile(path, m_current);
         return;
     }
     setBuffering(true);
@@ -270,10 +301,59 @@ void TtsEngine::playCurrentIfReady() {
     prefetch();
 }
 
-void TtsEngine::playFile(const QString &path) {
+// The article title and byline are spoken as their own clip. Keeping it out of
+// the sentence list means the reader's spans and the player's indices stay in
+// step, and a failed announcement never blocks the article itself.
+void TtsEngine::playIntro() {
+    if (m_intro.isEmpty()) {
+        m_introPending = false;
+        playCurrentIfReady();
+        return;
+    }
+    const QString path = cachePath(m_intro);
+    if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
+        playFile(path, IntroIndex);
+        return;
+    }
+    setBuffering(true);
+    setStatus(tr("Preparing the title…"));
+    ensureIntroAudio();
+}
+
+void TtsEngine::ensureIntroAudio() {
+    if (m_intro.isEmpty())
+        return;
+    const QString path = cachePath(m_intro);
+    if (QFileInfo::exists(path) && QFileInfo(path).size() > 0)
+        return;
+    if (m_introSynthesizing)
+        return;
+    m_introSynthesizing = true;
+    const int generation = m_generation;
+    m_kokoro->synthesize(m_intro, m_voice, m_speed, path,
+                         [this, generation, path](const QString &saved, const QString &error) {
+        if (generation != m_generation)
+            return;
+        m_introSynthesizing = false;
+        if (!error.isEmpty()) {
+            // A title that cannot be spoken should not hold up the article.
+            m_introPending = false;
+            setBuffering(false);
+            if (m_playing) {
+                playCurrentIfReady();
+                prefetch();
+            }
+            return;
+        }
+        if (m_playing && m_introPending)
+            playFile(saved.isEmpty() ? path : saved, IntroIndex);
+    });
+}
+
+void TtsEngine::playFile(const QString &path, int index) {
     setBuffering(false);
     setStatus(tr("Reading"));
-    m_sourceIndex = m_current;
+    m_sourceIndex = index;
     m_player->setSource(QUrl::fromLocalFile(path));
     m_player->play();
 }
@@ -287,8 +367,8 @@ void TtsEngine::ensureAudio(int index) {
     const QString path = cachePath(text);
     if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
         m_ready.insert(index);
-        if (index == m_current && m_playing)
-            playFile(path);
+        if (index == m_current && m_playing && !m_introPending)
+            playFile(path, index);
         return;
     }
     m_pending.insert(index);
@@ -309,8 +389,8 @@ void TtsEngine::ensureAudio(int index) {
             return;
         }
         m_ready.insert(index);
-        if (index == m_current && m_playing)
-            playFile(saved.isEmpty() ? path : saved);
+        if (index == m_current && m_playing && !m_introPending)
+            playFile(saved.isEmpty() ? path : saved, index);
     });
 }
 

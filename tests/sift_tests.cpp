@@ -186,6 +186,17 @@ private slots:
         QCOMPARE(TtsEngine::prefetchIndices(QList<int>(10, -1), 0).size(), 8);
     }
 
+    void announcementsNameTheAuthor() {
+        QCOMPARE(TtsEngine::announcement("In a world of panic", "Dan Maccarone"),
+                 QString("In a world of panic. By Dan Maccarone."));
+        QCOMPARE(TtsEngine::announcement("  A  spaced   title ", " A Writer "),
+                 QString("A spaced title. By A Writer."));
+        // Without a byline, the title stands alone; without a title there is
+        // nothing worth announcing.
+        QCOMPARE(TtsEngine::announcement("Just a title", ""), QString("Just a title."));
+        QCOMPARE(TtsEngine::announcement("", "A Writer"), QString());
+    }
+
     void libraryPlaylistsAndQueue() {
         QTemporaryDir dir;
         Library library(dir.path());

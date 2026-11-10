@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QCoreApplication>
 #include <QHash>
 #include <QObject>
 #include <QSet>
@@ -60,7 +61,23 @@ public:
         return indices;
     }
 
-    void setSentences(const QStringList &sentences, const QList<int> &blocks = {}, int startSentence = 0);
+    // The way an article introduces itself before its first sentence. The
+    // sentence break is deliberate: it gives the title a pause before the
+    // byline instead of running the two together.
+    static QString announcement(const QString &title, const QString &author) {
+        const QString cleanTitle = title.simplified();
+        if (cleanTitle.isEmpty())
+            return {};
+        const QString cleanAuthor = author.simplified();
+        if (cleanAuthor.isEmpty())
+            return QCoreApplication::translate("TtsEngine", "%1.").arg(cleanTitle);
+        return QCoreApplication::translate("TtsEngine", "%1. By %2.").arg(cleanTitle, cleanAuthor);
+    }
+
+    // `intro` is spoken once before the first sentence when playback starts at
+    // the top of an article; resuming halfway through skips it.
+    void setSentences(const QStringList &sentences, const QList<int> &blocks = {}, int startSentence = 0,
+                      const QString &intro = {});
     void setStartSentence(int index);
     void setVoice(const QString &voice);
     void setSpeed(double speed);
@@ -87,12 +104,19 @@ signals:
     void error(const QString &message);
 
 private:
+    // The intro is spoken before sentence 0 without becoming a sentence, so
+    // sentence indices keep matching the reader's spans. It uses its own
+    // source index because the player has no sentence to report while it runs.
+    static constexpr int IntroIndex = -2;
+
     void setPlaying(bool playing);
     void setBuffering(bool buffering);
     void setStatus(const QString &status);
     void ensureAudio(int index);
+    void ensureIntroAudio();
     void playCurrentIfReady();
-    void playFile(const QString &path);
+    void playIntro();
+    void playFile(const QString &path, int index);
     void prefetch();
     void invalidateAudio();
     QString cachePath(const QString &text) const;
@@ -107,6 +131,9 @@ private:
     QSet<int> m_ready;
     QSet<int> m_pending;
     QHash<int, QString> m_errors;
+    QString m_intro;
+    bool m_introPending = false;
+    bool m_introSynthesizing = false;
     QString m_voice = "af_heart";
     double m_speed = 1.0;
     int m_current = 0;
