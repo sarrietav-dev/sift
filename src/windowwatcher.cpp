@@ -19,9 +19,14 @@ void WindowWatcher::setWindow(QWindow *window) {
 bool WindowWatcher::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_window && event->type() == QEvent::Expose) {
         const bool exposed = m_window->isExposed();
-        if (exposed && !m_exposed)
-            emit shown();
+        const bool changed = exposed != m_exposed;
         m_exposed = exposed;
+        if (changed) {
+            if (exposed)
+                emit shown();
+            else
+                emit hidden();
+        }
     }
     return QObject::eventFilter(watched, event);
 }

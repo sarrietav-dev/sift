@@ -17,6 +17,7 @@ public:
     void setWindow(QWindow *window);
 
 signals:
+    void hidden();
     void shown();
 
 protected:

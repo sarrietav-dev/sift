@@ -271,46 +271,57 @@ ApplicationWindow {
                 anchors.leftMargin: workspace.queueDocked && !win.rtl ? workspace.queueWidth + 1 : 0
                 anchors.rightMargin: workspace.queueDocked && win.rtl ? workspace.queueWidth + 1 : 0
 
-                WebEngineView {
-                    id: readerView
-                    objectName: "readerView"
+                // A retained layer keeps the last article frame on screen
+                // while Chromium wakes up, including with software rendering.
+                Item {
+                    id: readerFrame
+                    objectName: "readerFrame"
                     anchors.fill: parent
-                    focus: false
-                    backgroundColor: theme.background
-                    settings.javascriptEnabled: true
-                    settings.localContentCanAccessRemoteUrls: true
-                    settings.localContentCanAccessFileUrls: true
+                    property bool live: true
+                    layer.enabled: true
+                    layer.live: live
 
-                    Component.onCompleted: loadHtml(backend.readerShell(), win.readerShellUrl)
+                    WebEngineView {
+                        id: readerView
+                        objectName: "readerView"
+                        anchors.fill: parent
+                        focus: false
+                        backgroundColor: theme.background
+                        settings.javascriptEnabled: true
+                        settings.localContentCanAccessRemoteUrls: true
+                        settings.localContentCanAccessFileUrls: true
 
-                    onLoadingChanged: function(request) {
-                        if (request.status === WebEngineView.LoadSucceededStatus) {
-                            win.readerReady = true
-                            win.applyReaderTheme()
-                            paintTimer.restart()
-                            if (win.pendingRender)
-                                win.renderArticle(win.pendingRender)
-                        } else if (request.status === WebEngineView.LoadFailedStatus) {
-                            win.readerReady = false
-                            if (win.pendingRender)
-                                backend.sentencesReady(win.pendingRender.token, [])
-                            win.pendingRender = null
+                        Component.onCompleted: loadHtml(backend.readerShell(), win.readerShellUrl)
+
+                        onLoadingChanged: function(request) {
+                            if (request.status === WebEngineView.LoadSucceededStatus) {
+                                win.readerReady = true
+                                win.applyReaderTheme()
+                                paintTimer.restart()
+                                if (win.pendingRender)
+                                    win.renderArticle(win.pendingRender)
+                            } else if (request.status === WebEngineView.LoadFailedStatus) {
+                                win.readerReady = false
+                                if (win.pendingRender)
+                                    backend.sentencesReady(win.pendingRender.token, [])
+                                win.pendingRender = null
+                            }
                         }
-                    }
 
-                    onNavigationRequested: function(request) {
-                        const target = request.url.toString()
-                        if (target === win.readerShellUrl) {
-                            return
-                        } else if (target.indexOf("https://sift.invalid/follow/paused") === 0) {
-                            request.action = WebEngineNavigationRequest.IgnoreRequest
-                            win.following = false
-                        } else if (target.indexOf("https://sift.invalid/") === 0) {
-                            request.action = WebEngineNavigationRequest.IgnoreRequest
-                            backend.handleReaderUrl(target)
-                        } else if (target.indexOf("data:") !== 0 && target.indexOf("about:") !== 0) {
-                            request.action = WebEngineNavigationRequest.IgnoreRequest
-                            backend.openExternal(target)
+                        onNavigationRequested: function(request) {
+                            const target = request.url.toString()
+                            if (target === win.readerShellUrl) {
+                                return
+                            } else if (target.indexOf("https://sift.invalid/follow/paused") === 0) {
+                                request.action = WebEngineNavigationRequest.IgnoreRequest
+                                win.following = false
+                            } else if (target.indexOf("https://sift.invalid/") === 0) {
+                                request.action = WebEngineNavigationRequest.IgnoreRequest
+                                backend.handleReaderUrl(target)
+                            } else if (target.indexOf("data:") !== 0 && target.indexOf("about:") !== 0) {
+                                request.action = WebEngineNavigationRequest.IgnoreRequest
+                                backend.openExternal(target)
+                            }
                         }
                     }
                 }
@@ -486,15 +497,10 @@ ApplicationWindow {
         onTriggered: win.readerPainted = true
     }
 
-    // Hiding and showing the view makes Chromium treat it as newly shown and
-    // draw a fresh frame. The cover keeps the window colour over it meanwhile.
     Timer {
-        id: reshowTimer
-        interval: 30
-        onTriggered: {
-            readerView.visible = true
-            paintTimer.restart()
-        }
+        id: readerRecoveryTimer
+        interval: 350
+        onTriggered: readerFrame.live = true
     }
 
     Timer {
@@ -506,12 +512,22 @@ ApplicationWindow {
 
     Connections {
         target: backend
+        function onReaderSuspended() {
+            readerRecoveryTimer.stop()
+            if (win.readerPainted)
+                readerFrame.live = false
+        }
         function onReaderNeedsRepaint() {
-            if (!win.readerReady || reshowTimer.running)
+            if (!win.readerReady)
                 return
-            win.readerPainted = false
+            if (win.readerPainted)
+                readerFrame.live = false
+            // Notify Chromium that the view is shown again without leaving it
+            // hidden across a rendered frame. Reusing the startup cover here
+            // would blank the article on every workspace return.
             readerView.visible = false
-            reshowTimer.restart()
+            readerView.visible = true
+            readerRecoveryTimer.restart()
         }
         function onReaderRender(article) {
             win.renderArticle(article)

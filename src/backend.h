@@ -173,6 +173,7 @@ signals:
     void currentSentenceChanged();
     void sentenceCountChanged();
     void readerRender(const QVariantMap &article);
+    void readerSuspended();
     void readerNeedsRepaint();
     void highlightSentence(int index);
     void toast(const QString &message);

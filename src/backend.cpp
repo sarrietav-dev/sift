@@ -66,6 +66,7 @@ Backend::Backend(Theme *theme, QObject *parent)
 void Backend::watchWindow(QWindow *window) {
     auto *watcher = new WindowWatcher(this);
     watcher->setWindow(window);
+    connect(watcher, &WindowWatcher::hidden, this, &Backend::readerSuspended);
     connect(watcher, &WindowWatcher::shown, this, &Backend::readerNeedsRepaint);
 }
 

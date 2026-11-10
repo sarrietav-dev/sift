@@ -77,6 +77,55 @@ private slots:
         if (qEnvironmentVariableIsSet("SIFT_GUI_SCREENSHOT"))
             QVERIFY(screenshot.save(qEnvironmentVariable("SIFT_GUI_SCREENSHOT")));
 
+        // Returning to a workspace must not blank the article behind the
+        // startup cover or leave the WebEngine view hidden until a timer fires.
+        QObject *reader = window->findChild<QObject *>("readerView");
+        QVERIFY(reader);
+        QObject *readerFrame = window->findChild<QObject *>("readerFrame");
+        QVERIFY(readerFrame);
+        QVERIFY(readerFrame->property("live").toBool());
+        QSignalSpy coverVisibility(cover, SIGNAL(visibleChanged()));
+        QSignalSpy readerLoads(reader, SIGNAL(loadingChanged(QWebEngineLoadingInfo)));
+        QVERIFY(coverVisibility.isValid());
+        QVERIFY(readerLoads.isValid());
+        const int renderCount = readerRender.size();
+        auto *frameItem = qobject_cast<QQuickItem *>(readerFrame);
+        QVERIFY(frameItem);
+        const auto articleImage = [&]() {
+            const QImage image = window->grabWindow();
+            const qreal scale = qreal(image.width()) / window->width();
+            const QPointF origin = frameItem->mapToScene(QPointF());
+            return image.copy(QRect(qRound(origin.x() * scale), qRound(origin.y() * scale),
+                                    qRound(frameItem->width() * scale), qRound(frameItem->height() * scale)));
+        };
+        for (int i = 0; i < 3; ++i) {
+            // Let a tiling compositor finish any pending size configuration.
+            QTest::qWait(150);
+            const QImage beforeRecovery = articleImage();
+            QVERIFY(!beforeRecovery.isNull());
+            backend.readerSuspended();
+            QVERIFY(!readerFrame->property("live").toBool());
+            backend.readerNeedsRepaint();
+            QVERIFY(reader->property("visible").toBool());
+            QVERIFY(!readerFrame->property("live").toBool());
+            QVERIFY(window->property("readerPainted").toBool());
+            QVERIFY(!cover->property("visible").toBool());
+            QTest::qWait(50);
+            QCOMPARE(articleImage(), beforeRecovery);
+            QTRY_VERIFY(readerFrame->property("live").toBool());
+        }
+        // Switching away again during recovery must keep the cached texture
+        // frozen, not let the previous return's timer capture a black frame.
+        backend.readerNeedsRepaint();
+        backend.readerSuspended();
+        QTest::qWait(450);
+        QVERIFY(!readerFrame->property("live").toBool());
+        backend.readerNeedsRepaint();
+        QTRY_VERIFY(readerFrame->property("live").toBool());
+        QCOMPARE(coverVisibility.size(), 0);
+        QCOMPARE(readerLoads.size(), 0);
+        QCOMPARE(readerRender.size(), renderCount);
+
         // A second article renders into the same page without a reload.
         QString secondId;
         {
