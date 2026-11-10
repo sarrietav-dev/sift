@@ -129,6 +129,14 @@ void TtsEngine::setSentences(const QStringList &sentences, const QList<int> &blo
     emit countChanged();
     emit currentChanged();
     emit sentenceChanged(m_current);
+
+    // Have the opening clip ready before playback is asked for. Waiting for a
+    // cold server after play() leaves the output idle for seconds, and the
+    // device takes the opening words with it when it wakes back up.
+    if (m_introPending)
+        ensureIntroAudio();
+    if (!m_sentences.isEmpty())
+        ensureAudio(m_current);
 }
 
 void TtsEngine::setStartSentence(int index) {
@@ -380,7 +388,9 @@ void TtsEngine::ensureAudio(int index) {
         m_pending.remove(index);
         if (!error.isEmpty()) {
             m_errors.insert(index, error);
-            if (index == m_current) {
+            // A clip prepared ahead of playback can fail quietly; the error is
+            // worth showing only when the reader is waiting for that sentence.
+            if (index == m_current && m_playing) {
                 setBuffering(false);
                 setPlaying(false);
                 setStatus(error);
