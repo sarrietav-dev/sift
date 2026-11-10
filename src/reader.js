@@ -8,6 +8,8 @@
     var skipTags = new Set(['PRE', 'CODE', 'SCRIPT', 'STYLE', 'SVG', 'MATH', 'TABLE', 'TEXTAREA', 'NOSCRIPT', 'KBD', 'SAMP']);
     var blockSelector = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,dd,dt,div';
     var sentences = [];
+    var spans = [];
+    var currentSpan = null;
 
     function stopFollowing() {
         if (!following) return;
@@ -126,8 +128,10 @@
             return a.block === b.block ? a.start - b.start : a.block - b.block;
         });
         var result = [];
+        spans = [];
         for (var i = 0; i < found.length; i++) {
             found[i].element.setAttribute('data-sift', String(i));
+            spans.push(found[i].element);
             result.push({ i: i, text: found[i].text, block: found[i].block });
         }
         return result;
@@ -173,18 +177,32 @@
         document.getElementById('sift-title').textContent = article.title || '';
         renderMeta(article.meta);
 
-        var content = document.getElementById('sift-content');
-        content.innerHTML = article.html || '';
+        // Parse into an inert template first: nothing fetches until the
+        // article is in the page, and then images load lazily, so a long
+        // illustrated article paints its first screen without waiting on, or
+        // decoding, every picture below it.
+        var template = document.createElement('template');
+        template.innerHTML = article.html || '';
+        var fragment = template.content;
+        var images = fragment.querySelectorAll('img');
+        for (var m = 0; m < images.length; m++) {
+            images[m].setAttribute('loading', 'lazy');
+            images[m].setAttribute('decoding', 'async');
+        }
 
         // Some extractors keep the title in the body as well as the metadata.
-        var first = content.firstElementChild;
+        var first = fragment.firstElementChild;
         if (first && /^H[1-2]$/.test(first.tagName)
             && first.textContent.trim().toLocaleLowerCase() === (article.title || '').trim().toLocaleLowerCase()) {
             first.remove();
         }
-        wrapTables(content);
+        wrapTables(fragment);
+
+        var content = document.getElementById('sift-content');
+        content.replaceChildren(fragment);
 
         following = true;
+        currentSpan = null;
         window.scrollTo(0, 0);
         sentences = wrapSentences(content, root.lang);
         document.body.classList.add('sift-has-article');
@@ -231,15 +249,14 @@
     }, true);
 
     window.siftSetCurrent = function (index) {
-        var spans = document.querySelectorAll('.sift-sentence.sift-current');
-        for (var i = 0; i < spans.length; i++) spans[i].classList.remove('sift-current');
-        var current = document.querySelector('.sift-sentence[data-sift="' + index + '"]');
-        if (current) current.classList.add('sift-current');
+        if (currentSpan) currentSpan.classList.remove('sift-current');
+        currentSpan = spans[index] || null;
+        if (currentSpan) currentSpan.classList.add('sift-current');
         return true;
     };
 
     window.siftScrollToCurrent = function (index, center) {
-        var current = document.querySelector('.sift-sentence[data-sift="' + index + '"]');
+        var current = spans[index];
         if (current && following)
             current.scrollIntoView({ block: center ? 'center' : 'nearest', behavior: 'smooth' });
         return true;
