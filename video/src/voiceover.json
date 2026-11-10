@@ -1,0 +1,699 @@
+[
+  {
+    "id": "intro",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "Too many tabs. Too little time to read them. Meet sift.",
+    "src": "voice/intro.mp3",
+    "durationSec": 3.913265,
+    "words": [
+      {
+        "text": "Too",
+        "startMs": 0,
+        "endMs": 200
+      },
+      {
+        "text": "many",
+        "startMs": 200,
+        "endMs": 500
+      },
+      {
+        "text": "tabs.",
+        "startMs": 500,
+        "endMs": 1080
+      },
+      {
+        "text": "Too",
+        "startMs": 1620,
+        "endMs": 1760
+      },
+      {
+        "text": "little",
+        "startMs": 1760,
+        "endMs": 1980
+      },
+      {
+        "text": "time",
+        "startMs": 1980,
+        "endMs": 2280
+      },
+      {
+        "text": "to",
+        "startMs": 2280,
+        "endMs": 2500
+      },
+      {
+        "text": "read",
+        "startMs": 2500,
+        "endMs": 2600
+      },
+      {
+        "text": "them.",
+        "startMs": 2600,
+        "endMs": 2940
+      },
+      {
+        "text": "Meet",
+        "startMs": 3360,
+        "endMs": 3520
+      },
+      {
+        "text": "sift.",
+        "startMs": 3520,
+        "endMs": 3820
+      }
+    ]
+  },
+  {
+    "id": "clip",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "Give it any web page. sift strips it down to the article, and keeps a clean Markdown copy you can own.",
+    "src": "voice/clip.mp3",
+    "durationSec": 6.64551,
+    "words": [
+      {
+        "text": "Give",
+        "startMs": 0,
+        "endMs": 320
+      },
+      {
+        "text": "it",
+        "startMs": 320,
+        "endMs": 460
+      },
+      {
+        "text": "any",
+        "startMs": 460,
+        "endMs": 860
+      },
+      {
+        "text": "web",
+        "startMs": 860,
+        "endMs": 1100
+      },
+      {
+        "text": "page.",
+        "startMs": 1100,
+        "endMs": 1520
+      },
+      {
+        "text": "sift",
+        "startMs": 2460,
+        "endMs": 2480
+      },
+      {
+        "text": "strips",
+        "startMs": 2480,
+        "endMs": 2840
+      },
+      {
+        "text": "it",
+        "startMs": 2840,
+        "endMs": 3040
+      },
+      {
+        "text": "down",
+        "startMs": 3040,
+        "endMs": 3240
+      },
+      {
+        "text": "to",
+        "startMs": 3240,
+        "endMs": 3340
+      },
+      {
+        "text": "the",
+        "startMs": 3340,
+        "endMs": 3580
+      },
+      {
+        "text": "article,",
+        "startMs": 3580,
+        "endMs": 3820
+      },
+      {
+        "text": "and",
+        "startMs": 3860,
+        "endMs": 4380
+      },
+      {
+        "text": "keeps",
+        "startMs": 4380,
+        "endMs": 4580
+      },
+      {
+        "text": "a",
+        "startMs": 4580,
+        "endMs": 4780
+      },
+      {
+        "text": "clean",
+        "startMs": 4780,
+        "endMs": 5100
+      },
+      {
+        "text": "Markdown",
+        "startMs": 5100,
+        "endMs": 5560
+      },
+      {
+        "text": "copy",
+        "startMs": 5560,
+        "endMs": 5860
+      },
+      {
+        "text": "you",
+        "startMs": 5860,
+        "endMs": 6160
+      },
+      {
+        "text": "can",
+        "startMs": 6160,
+        "endMs": 6440
+      },
+      {
+        "text": "own.",
+        "startMs": 6440,
+        "endMs": 6620
+      }
+    ]
+  },
+  {
+    "id": "listen",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "Then it reads it to you, sentence by sentence, with a local Kokoro voice.",
+    "src": "voice/listen.mp3",
+    "durationSec": 4.865896,
+    "words": [
+      {
+        "text": "Then",
+        "startMs": 0,
+        "endMs": 320
+      },
+      {
+        "text": "it",
+        "startMs": 320,
+        "endMs": 620
+      },
+      {
+        "text": "reads",
+        "startMs": 620,
+        "endMs": 820
+      },
+      {
+        "text": "it",
+        "startMs": 820,
+        "endMs": 1000
+      },
+      {
+        "text": "to",
+        "startMs": 1000,
+        "endMs": 1160
+      },
+      {
+        "text": "you,",
+        "startMs": 1160,
+        "endMs": 1520
+      },
+      {
+        "text": "sentence",
+        "startMs": 1700,
+        "endMs": 2020
+      },
+      {
+        "text": "by",
+        "startMs": 2020,
+        "endMs": 2440
+      },
+      {
+        "text": "sentence,",
+        "startMs": 2440,
+        "endMs": 2900
+      },
+      {
+        "text": "with",
+        "startMs": 3400,
+        "endMs": 3480
+      },
+      {
+        "text": "a",
+        "startMs": 3480,
+        "endMs": 3740
+      },
+      {
+        "text": "local",
+        "startMs": 3740,
+        "endMs": 4000
+      },
+      {
+        "text": "Kokoro",
+        "startMs": 4000,
+        "endMs": 4380
+      },
+      {
+        "text": "voice.",
+        "startMs": 4380,
+        "endMs": 4780
+      }
+    ]
+  },
+  {
+    "id": "article",
+    "voice": "kokoro:af_heart",
+    "text": "Reading is a conversation with someone who is not in the room. The page waits, patient and exact, until you are ready to continue.",
+    "src": "voice/article.mp3",
+    "durationSec": 7.968,
+    "words": [
+      {
+        "text": "Reading",
+        "startMs": 0,
+        "endMs": 400
+      },
+      {
+        "text": "is",
+        "startMs": 400,
+        "endMs": 640
+      },
+      {
+        "text": "a",
+        "startMs": 640,
+        "endMs": 800
+      },
+      {
+        "text": "conversation",
+        "startMs": 800,
+        "endMs": 1300
+      },
+      {
+        "text": "with",
+        "startMs": 1300,
+        "endMs": 1620
+      },
+      {
+        "text": "someone",
+        "startMs": 1620,
+        "endMs": 1900
+      },
+      {
+        "text": "who",
+        "startMs": 1900,
+        "endMs": 2120
+      },
+      {
+        "text": "is",
+        "startMs": 2120,
+        "endMs": 2320
+      },
+      {
+        "text": "not",
+        "startMs": 2320,
+        "endMs": 2480
+      },
+      {
+        "text": "in",
+        "startMs": 2480,
+        "endMs": 2620
+      },
+      {
+        "text": "the",
+        "startMs": 2620,
+        "endMs": 2960
+      },
+      {
+        "text": "room.",
+        "startMs": 2960,
+        "endMs": 2960
+      },
+      {
+        "text": "The",
+        "startMs": 3660,
+        "endMs": 3720
+      },
+      {
+        "text": "page",
+        "startMs": 3720,
+        "endMs": 4000
+      },
+      {
+        "text": "waits,",
+        "startMs": 4000,
+        "endMs": 4420
+      },
+      {
+        "text": "patient",
+        "startMs": 5100,
+        "endMs": 5100
+      },
+      {
+        "text": "and",
+        "startMs": 5100,
+        "endMs": 5340
+      },
+      {
+        "text": "exact,",
+        "startMs": 5340,
+        "endMs": 5780
+      },
+      {
+        "text": "until",
+        "startMs": 6200,
+        "endMs": 6320
+      },
+      {
+        "text": "you",
+        "startMs": 6320,
+        "endMs": 6500
+      },
+      {
+        "text": "are",
+        "startMs": 6500,
+        "endMs": 6780
+      },
+      {
+        "text": "ready",
+        "startMs": 6780,
+        "endMs": 6900
+      },
+      {
+        "text": "to",
+        "startMs": 6900,
+        "endMs": 7200
+      },
+      {
+        "text": "continue.",
+        "startMs": 7200,
+        "endMs": 7460
+      }
+    ]
+  },
+  {
+    "id": "queue",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "Line pages up in a single queue. It advances on its own, and reopens right where you left off.",
+    "src": "voice/queue.mp3",
+    "durationSec": 6.017846,
+    "words": [
+      {
+        "text": "Line",
+        "startMs": 0,
+        "endMs": 460
+      },
+      {
+        "text": "pages",
+        "startMs": 460,
+        "endMs": 840
+      },
+      {
+        "text": "up",
+        "startMs": 840,
+        "endMs": 1140
+      },
+      {
+        "text": "in",
+        "startMs": 1140,
+        "endMs": 1300
+      },
+      {
+        "text": "a",
+        "startMs": 1300,
+        "endMs": 1480
+      },
+      {
+        "text": "single",
+        "startMs": 1480,
+        "endMs": 1700
+      },
+      {
+        "text": "queue.",
+        "startMs": 1700,
+        "endMs": 2100
+      },
+      {
+        "text": "It",
+        "startMs": 2960,
+        "endMs": 3060
+      },
+      {
+        "text": "advances",
+        "startMs": 3060,
+        "endMs": 3340
+      },
+      {
+        "text": "on",
+        "startMs": 3340,
+        "endMs": 3600
+      },
+      {
+        "text": "its",
+        "startMs": 3600,
+        "endMs": 3720
+      },
+      {
+        "text": "own,",
+        "startMs": 3720,
+        "endMs": 4000
+      },
+      {
+        "text": "and",
+        "startMs": 4000,
+        "endMs": 4460
+      },
+      {
+        "text": "reopens",
+        "startMs": 4460,
+        "endMs": 4940
+      },
+      {
+        "text": "right",
+        "startMs": 4940,
+        "endMs": 5260
+      },
+      {
+        "text": "where",
+        "startMs": 5260,
+        "endMs": 5400
+      },
+      {
+        "text": "you",
+        "startMs": 5400,
+        "endMs": 5580
+      },
+      {
+        "text": "left",
+        "startMs": 5580,
+        "endMs": 5720
+      },
+      {
+        "text": "off.",
+        "startMs": 5720,
+        "endMs": 5980
+      }
+    ]
+  },
+  {
+    "id": "cli",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "Everything works from the terminal too. Add, list, and reorder, all scriptable.",
+    "src": "voice/cli.mp3",
+    "durationSec": 5.26059,
+    "words": [
+      {
+        "text": "Everything",
+        "startMs": 0,
+        "endMs": 440
+      },
+      {
+        "text": "works",
+        "startMs": 440,
+        "endMs": 780
+      },
+      {
+        "text": "from",
+        "startMs": 780,
+        "endMs": 1000
+      },
+      {
+        "text": "the",
+        "startMs": 1000,
+        "endMs": 1180
+      },
+      {
+        "text": "terminal",
+        "startMs": 1180,
+        "endMs": 1440
+      },
+      {
+        "text": "too.",
+        "startMs": 1820,
+        "endMs": 2220
+      },
+      {
+        "text": "Add,",
+        "startMs": 2880,
+        "endMs": 2940
+      },
+      {
+        "text": "list,",
+        "startMs": 3180,
+        "endMs": 3400
+      },
+      {
+        "text": "and",
+        "startMs": 3580,
+        "endMs": 3820
+      },
+      {
+        "text": "reorder,",
+        "startMs": 3820,
+        "endMs": 4000
+      },
+      {
+        "text": "all",
+        "startMs": 4560,
+        "endMs": 4780
+      },
+      {
+        "text": "scriptable.",
+        "startMs": 4780,
+        "endMs": 5180
+      }
+    ]
+  },
+  {
+    "id": "native",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "And it is a native Omarchy app. It follows your theme, your fonts, and your light or dark mode.",
+    "src": "voice/native.mp3",
+    "durationSec": 6.252063,
+    "words": [
+      {
+        "text": "And",
+        "startMs": 0,
+        "endMs": 180
+      },
+      {
+        "text": "it",
+        "startMs": 180,
+        "endMs": 380
+      },
+      {
+        "text": "is",
+        "startMs": 380,
+        "endMs": 660
+      },
+      {
+        "text": "a",
+        "startMs": 660,
+        "endMs": 860
+      },
+      {
+        "text": "native",
+        "startMs": 860,
+        "endMs": 1300
+      },
+      {
+        "text": "Omarchy",
+        "startMs": 1300,
+        "endMs": 1820
+      },
+      {
+        "text": "app.",
+        "startMs": 1820,
+        "endMs": 2180
+      },
+      {
+        "text": "It",
+        "startMs": 3020,
+        "endMs": 3020
+      },
+      {
+        "text": "follows",
+        "startMs": 3020,
+        "endMs": 3200
+      },
+      {
+        "text": "your",
+        "startMs": 3200,
+        "endMs": 3520
+      },
+      {
+        "text": "theme,",
+        "startMs": 3520,
+        "endMs": 3760
+      },
+      {
+        "text": "your",
+        "startMs": 4360,
+        "endMs": 4780
+      },
+      {
+        "text": "fonts,",
+        "startMs": 4780,
+        "endMs": 4780
+      },
+      {
+        "text": "and",
+        "startMs": 5180,
+        "endMs": 5260
+      },
+      {
+        "text": "your",
+        "startMs": 5260,
+        "endMs": 5540
+      },
+      {
+        "text": "light",
+        "startMs": 5540,
+        "endMs": 5620
+      },
+      {
+        "text": "or",
+        "startMs": 5620,
+        "endMs": 5820
+      },
+      {
+        "text": "dark",
+        "startMs": 5820,
+        "endMs": 6000
+      },
+      {
+        "text": "mode.",
+        "startMs": 6000,
+        "endMs": 6220
+      }
+    ]
+  },
+  {
+    "id": "outro",
+    "voice": "gpt-realtime-2.1:marin",
+    "text": "sift. Read the web, aloud.",
+    "src": "voice/outro.mp3",
+    "durationSec": 3.128209,
+    "words": [
+      {
+        "text": "sift.",
+        "startMs": 0,
+        "endMs": 1060
+      },
+      {
+        "text": "Read",
+        "startMs": 1680,
+        "endMs": 1680
+      },
+      {
+        "text": "the",
+        "startMs": 1680,
+        "endMs": 1900
+      },
+      {
+        "text": "web,",
+        "startMs": 1900,
+        "endMs": 2260
+      },
+      {
+        "text": "aloud.",
+        "startMs": 2260,
+        "endMs": 3100
+      }
+    ]
+  }
+]

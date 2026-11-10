@@ -1,0 +1,47 @@
+{
+  "name": "video",
+  "version": "1.0.0",
+  "description": "My Remotion video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.542",
+    "@remotion/google-fonts": "^4.0.542",
+    "@remotion/media": "^4.0.542",
+    "@remotion/sfx": "^4.0.542",
+    "@remotion/tailwind-v4": "4.0.542",
+    "culori": "^4.0.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.542",
+    "tailwindcss": "4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.542",
+    "@types/culori": "^4.0.1",
+    "@types/react": "19.3.0",
+    "@types/web": "0.0.166",
+    "eslint": "10.12.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc",
+    "voiceover": "OPENAI_API_KEY=$(op read op://Personal/5spn4eczfb6ebmo3eushafiwdm/API_KEY) uv run scripts/voiceover.py",
+    "sounds": "uv run scripts/sounds.py",
+    "render": "remotion render Sift out/sift-raw.mp4 && ffmpeg -v error -y -i out/sift-raw.mp4 -c:v copy -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 -c:a aac -b:a 192k out/sift.mp4"
+  },
+  "allowScripts": {
+    "esbuild": false
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
