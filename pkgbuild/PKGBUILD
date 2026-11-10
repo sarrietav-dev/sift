@@ -1,4 +1,10 @@
-pkgname=sift
+# Local development build, used by `bin/install`.
+# The published package lives in pkgbuild/aur/PKGBUILD.
+#
+# The package is called sift-reader because `sift` on the AUR is an unrelated
+# grep replacement. The binary is still installed as /usr/bin/sift, so this
+# package declares a conflict with every AUR package that ships that path.
+pkgname=sift-reader
 pkgver=0.1.0
 pkgrel=1
 pkgdesc='Read the web with Kokoro'
@@ -6,6 +12,8 @@ arch=('x86_64' 'aarch64')
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-webengine' 'qt6-wayland')
 makedepends=('gcc' 'make')
+conflicts=('sift' 'sift-bin' 'sift-git')
+options=('!debug')
 source=()
 sha256sums=()
 

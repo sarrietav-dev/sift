@@ -45,6 +45,39 @@ The endpoint is configurable in Settings if you use a different host or port.
 
 `bin/install` puts `sift` in the Omarchy launcher (`Super + Space`).
 
+## Install from the AUR
+
+The AUR package is called **`sift-reader`**, not `sift`: `sift` on the AUR is
+an unrelated grep replacement, and a package name can only be used once. The
+command is still `sift`. Because that grep tool, `sift-bin` and `sift-git` all
+ship `/usr/bin/sift`, `sift-reader` conflicts with and replaces them — that is
+what keeps `yay -Syu` from swapping your reader for the grep tool.
+
+```sh
+yay -S sift-reader
+```
+
+### Publishing a release
+
+Bump `pkgver` and `pkgrel` in both `pkgbuild/PKGBUILD` and
+`pkgbuild/aur/PKGBUILD`, tag the release, then push to the AUR:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+cd pkgbuild/aur
+makepkg --printsrcinfo > .SRCINFO
+
+git clone ssh://aur@aur.archlinux.org/sift-reader.git /tmp/sift-reader-aur
+cp PKGBUILD .SRCINFO /tmp/sift-reader-aur/
+cd /tmp/sift-reader-aur
+git add PKGBUILD .SRCINFO
+git commit -m "sift-reader $(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
+git push
+```
+
+The first push creates the package on the AUR. `pkgbuild/aur/PKGBUILD` builds
+from the `v$pkgver` tag, so the tag must exist before the AUR can build it.
+
 ## Use
 
 ```sh
