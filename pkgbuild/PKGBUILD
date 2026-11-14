@@ -5,7 +5,7 @@
 # grep replacement. The binary is still installed as /usr/bin/sift, so this
 # package declares a conflict with every AUR package that ships that path.
 pkgname=sift-reader
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc='Read the web with Kokoro'
 arch=('x86_64' 'aarch64')
