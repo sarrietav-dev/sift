@@ -186,6 +186,22 @@ private slots:
         QCOMPARE(TtsEngine::prefetchIndices(QList<int>(10, -1), 0).size(), 8);
     }
 
+    void prefetchLooksPastOneSentenceBlocks() {
+        // A heading and a caption are blocks of their own. Stopping at the
+        // heading left the following paragraph to synthesize while the heading
+        // played, which is short enough to hear the gap.
+        const QList<int> heading{0, 0, 0, 1, 2, 2, 2, 2, 2, 3, 3};
+        QCOMPARE(TtsEngine::prefetchIndices(heading, 2), QList<int>({3, 4, 5, 6, 7, 8}));
+        // Each list item is a block too: a bullet list should keep several
+        // items queued instead of only the next one.
+        const QList<int> bullets{0, 0, 1, 2, 3, 4, 5, 6, 7, 8};
+        QCOMPARE(TtsEngine::prefetchIndices(bullets, 0), QList<int>({1, 2, 3, 4, 5, 6}));
+        // A paragraph with enough sentences left still gets the whole next
+        // one, but nothing beyond it.
+        const QList<int> paragraphs{0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2};
+        QCOMPARE(TtsEngine::prefetchIndices(paragraphs, 0), QList<int>({1, 2, 3, 4, 5, 6, 7, 8}));
+    }
+
     void announcementsNameTheAuthor() {
         QCOMPARE(TtsEngine::announcement("In a world of panic", "Dan Maccarone"),
                  QString("In a world of panic. By Dan Maccarone."));

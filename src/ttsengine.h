@@ -11,7 +11,7 @@ class QAudioOutput;
 class QMediaPlayer;
 
 // Sentence-by-sentence playback. Synthesizes through Kokoro, stores each MP3
-// under a content-addressed cache, and prefetches the next two sentences so
+// under a content-addressed cache, and prefetches the next paragraphs so
 // playback can move without waiting.
 class TtsEngine : public QObject {
     Q_OBJECT
@@ -35,7 +35,10 @@ public:
     QString status() const { return m_status; }
 
     // Sentence indices to preload: the rest of this paragraph, then the whole
-    // next one. Kept here so the window can be tested without a server.
+    // next one. Headings, figure captions, and list items are paragraphs too,
+    // and most hold a single sentence, so the window keeps crossing blocks
+    // until it holds enough sentences to cover the reader while the next clips
+    // synthesize. Kept here so the window can be tested without a server.
     static QList<int> prefetchIndices(const QList<int> &blocks, int current) {
         QList<int> indices;
         if (current < 0 || current >= blocks.size())
@@ -46,12 +49,13 @@ public:
                 indices << i;
             return indices;
         }
+        constexpr int minimumAhead = 6;
         int targetBlock = currentBlock;
         bool nextParagraph = false;
         for (int i = current + 1; i < blocks.size() && i - current <= 48; ++i) {
             const int block = blocks.at(i);
             if (block >= 0 && block != targetBlock) {
-                if (nextParagraph)
+                if (nextParagraph && indices.size() >= minimumAhead)
                     break;
                 nextParagraph = true;
                 targetBlock = block;

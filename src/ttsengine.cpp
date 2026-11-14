@@ -404,10 +404,11 @@ void TtsEngine::ensureAudio(int index) {
     });
 }
 
-// Keep the rest of the current paragraph and the whole next paragraph ready.
+// Keep the rest of the current paragraph and the whole next paragraph ready,
+// plus whatever follows short blocks such as headings and list items.
 // Sentence-only prefetching left an audible gap whenever playback crossed a
-// paragraph boundary, because the request for its first sentence only started
-// once the previous sentence had finished.
+// block boundary, because the request for its first sentence only started once
+// the previous sentence had finished.
 void TtsEngine::prefetch() {
     if (m_sentences.isEmpty())
         return;
