@@ -1,6 +1,8 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -243,6 +245,61 @@ private slots:
         QCOMPARE(library.queue().size(), 0);
         QVERIFY(!library.article(first).isEmpty());
         QCOMPARE(library.playlistItems(playlist).size(), 1);
+    }
+
+    void librarySortsQueue() {
+        QTemporaryDir dir;
+        Library library(dir.path());
+        QString beta, alpha, gamma, error;
+        QVariantMap data = articleData("https://example.com/b", "Beta", "Body.");
+        data["author"] = "Ada";
+        QVERIFY(library.saveArticle(data, &beta, &error));
+        data = articleData("https://example.com/a", "alpha", "Body.");
+        data["author"] = "Zed";
+        QVERIFY(library.saveArticle(data, &alpha, &error));
+        data = articleData("https://example.com/c", "Gamma", "Body.");
+        data["author"] = "Ada";
+        QVERIFY(library.saveArticle(data, &gamma, &error));
+
+        // The clips happen in the same second, so set the dates by hand.
+        const QString connection = "sift_sort_test";
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connection);
+            db.setDatabaseName(dir.path() + "/sift.db");
+            QVERIFY(db.open());
+            const QList<QPair<QString, QString>> dates{
+                {beta, "2025-03-01T00:00:00Z"}, {alpha, "2025-01-01T00:00:00Z"},
+                {gamma, "2025-02-01T00:00:00Z"}};
+            for (const auto &entry : dates) {
+                QSqlQuery update(db);
+                update.prepare("UPDATE articles SET clipped_at = ? WHERE id = ?");
+                update.addBindValue(entry.second);
+                update.addBindValue(entry.first);
+                QVERIFY(update.exec());
+            }
+        }
+        QSqlDatabase::removeDatabase(connection);
+
+        QVERIFY(library.addToQueue(beta));
+        QVERIFY(library.addToQueue(gamma));
+        QVERIFY(library.addToQueue(alpha));
+        auto ids = [&library] {
+            QStringList result;
+            for (const QVariant &item : library.queue())
+                result << item.toMap().value("id").toString();
+            return result;
+        };
+
+        QVERIFY(library.sortQueue("title"));
+        QCOMPARE(ids(), QStringList({alpha, beta, gamma}));
+        QVERIFY(library.sortQueue("newest"));
+        QCOMPARE(ids(), QStringList({beta, gamma, alpha}));
+        QVERIFY(library.sortQueue("oldest"));
+        QCOMPARE(ids(), QStringList({alpha, gamma, beta}));
+        QVERIFY(library.sortQueue("author"));
+        QCOMPARE(ids(), QStringList({beta, gamma, alpha}));
+        QVERIFY(!library.sortQueue("unsupported"));
+        QCOMPARE(ids(), QStringList({beta, gamma, alpha}));
     }
 
     void libraryDeletesArticleAndFiles() {

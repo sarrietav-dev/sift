@@ -136,6 +136,7 @@ public:
     Q_INVOKABLE void removeFromQueue(const QString &articleId);
     Q_INVOKABLE void clearQueue();
     Q_INVOKABLE void moveQueueItem(int from, int to);
+    Q_INVOKABLE void sortQueue(const QString &mode);
     Q_INVOKABLE void playQueueAt(int index);
 
     Q_INVOKABLE QVariantMap settings() const;

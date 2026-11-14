@@ -197,6 +197,15 @@ private slots:
         if (qEnvironmentVariableIsSet("SIFT_GUI_QUEUE_SCREENSHOT"))
             QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_QUEUE_SCREENSHOT")));
         window->resize(1180, 780);
+        QObject *queueMenu = window->findChild<QObject *>("queueMenu");
+        QVERIFY(queueMenu);
+        QVERIFY(QMetaObject::invokeMethod(queueMenu, "open"));
+        QTRY_VERIFY(queueMenu->property("visible").toBool());
+        QTest::qWait(100);
+        if (qEnvironmentVariableIsSet("SIFT_GUI_QUEUE_MENU_SCREENSHOT"))
+            QVERIFY(window->grabWindow().save(qEnvironmentVariable("SIFT_GUI_QUEUE_MENU_SCREENSHOT")));
+        QVERIFY(QMetaObject::invokeMethod(queueMenu, "close"));
+        QTRY_VERIFY(!queueMenu->property("visible").toBool());
         QObject *actionsMenu = window->findChild<QObject *>("actionsMenu");
         QVERIFY(actionsMenu);
         QVERIFY(QMetaObject::invokeMethod(actionsMenu, "open"));

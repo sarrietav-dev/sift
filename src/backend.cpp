@@ -607,6 +607,13 @@ void Backend::moveQueueItem(int from, int to) {
         refreshQueue();
 }
 
+void Backend::sortQueue(const QString &mode) {
+    if (!m_library->sortQueue(mode))
+        return;
+    refreshQueue();
+    setStatus(tr("Queue sorted"));
+}
+
 void Backend::playQueueAt(int index) {
     const QVariantList currentQueue = m_library->queue();
     if (index < 0 || index >= currentQueue.size())

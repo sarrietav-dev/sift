@@ -1047,6 +1047,32 @@ bool Library::moveQueueItem(int from, int to) {
     return true;
 }
 
+bool Library::sortQueue(const QString &mode) {
+    QString order;
+    if (mode == "title")
+        order = "COALESCE(a.title, '') COLLATE NOCASE";
+    else if (mode == "author")
+        order = "COALESCE(a.author, '') COLLATE NOCASE, COALESCE(a.title, '') COLLATE NOCASE";
+    else if (mode == "oldest")
+        order = "COALESCE(a.clipped_at, '')";
+    else if (mode == "newest")
+        order = "COALESCE(a.clipped_at, '') DESC";
+    else
+        return false;
+
+    QStringList ids;
+    QSqlQuery query(m_db);
+    if (!query.exec("SELECT q.article_id FROM queue q JOIN articles a ON a.id = q.article_id "
+                    "ORDER BY " + order + ", q.position"))
+        return false;
+    while (query.next())
+        ids << query.value(0).toString();
+    if (ids.isEmpty())
+        return false;
+    setQueue(ids);
+    return true;
+}
+
 void Library::clearQueue() {
     QSqlQuery query(m_db);
     query.exec("DELETE FROM queue");

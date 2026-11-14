@@ -49,6 +49,9 @@ public:
     bool addToQueue(const QString &articleId);
     bool removeFromQueue(const QString &articleId);
     bool moveQueueItem(int from, int to);
+    // Reorders the queue by title, author, or the date each page was added.
+    // Sorting writes back positions, replacing the manual order.
+    bool sortQueue(const QString &mode);
     void clearQueue();
 
     QString setting(const QString &key, const QString &fallback = {}) const;

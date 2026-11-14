@@ -76,6 +76,26 @@ Rectangle {
             FlatButton { iconPath: "M6 12h.01 M12 12h.01 M18 12h.01"; hint: qsTr("Queue actions"); enabled: backend.queue.length > 0; onClicked: queueMenu.open()
                 SiftMenu {
                     id: queueMenu
+                    objectName: "queueMenu"
+                    SiftMenu {
+                        submenu: true
+                        title: qsTr("Sort by")
+                        Repeater {
+                            model: [
+                                { value: "title", label: qsTr("Title") },
+                                { value: "author", label: qsTr("Author") },
+                                { value: "newest", label: qsTr("Newest first") },
+                                { value: "oldest", label: qsTr("Oldest first") }
+                            ]
+                            SiftMenuItem {
+                                required property var modelData
+                                text: modelData.label
+                                enabled: backend.queue.length > 1
+                                onTriggered: backend.sortQueue(modelData.value)
+                            }
+                        }
+                    }
+                    SiftMenuSeparator { }
                     SiftMenuItem { text: qsTr("Clear queue…"); destructive: true; onTriggered: clearDialog.open() }
                 }
             }

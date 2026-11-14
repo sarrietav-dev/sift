@@ -131,10 +131,12 @@ app refreshes itself after any of these commands.
 
 Drag a queue item by its grip (the position number turns into one on hover) to
 reorder it, or use its menu to play it next or send it to the top or bottom.
-Removing an item does not delete its saved files. Clicking any sentence starts
-reading from there. Manually scrolling suspends following; choose **Return to
-playback** to resume it. `Alt+click` a link to open it as a new sift article; a
-normal click opens it in your browser.
+The queue menu can sort the whole list by title, author, or the date each page
+was added; sorting replaces the manual order. Removing an item does not delete
+its saved files. Clicking any sentence starts reading from there. Manually
+scrolling suspends following; choose **Return to playback** to resume it.
+`Alt+click` a link to open it as a new sift article; a normal click opens it in
+your browser.
 
 ### Settings
 
