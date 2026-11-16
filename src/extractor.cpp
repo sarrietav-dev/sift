@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QUrl>
 #include <QWebEngineLoadingInfo>
@@ -154,9 +155,17 @@ constexpr qint64 kPatienceMs = 8000;
 Extractor::Extractor(QObject *parent)
     : QObject(parent) {
     auto *profile = QWebEngineProfile::defaultProfile();
-    profile->setHttpUserAgent(
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36");
+    // Bot checks compare the Chrome version in the UA against the Client Hints
+    // the engine sends, so borrow the engine's version instead of hardcoding
+    // one that drifts with every qt6-webengine update. The QtWebEngine token
+    // stays out: some sites refuse it.
+    static const QRegularExpression chromeVersion(QStringLiteral("Chrome/(\\d+(?:\\.\\d+)+)"));
+    const QRegularExpressionMatch match = chromeVersion.match(profile->httpUserAgent());
+    if (match.hasMatch()) {
+        profile->setHttpUserAgent(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/" + match.captured(1) + " Safari/537.36");
+    }
     auto *settings = profile->settings();
     settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
@@ -248,6 +257,7 @@ void Extractor::extract(const QString &url) {
     m_inFlight = false;
     m_triedEarly = false;
     m_patient = false;
+    m_waitedForInterstitial = false;
     m_lastTextLength = -1;
     m_stableTicks = 0;
     m_domReadyAt = -1;
@@ -373,8 +383,24 @@ void Extractor::parsed(const QString &json, bool final) {
                       .arg(article.value("wordCount").toInt())
                       .arg(object.value("parseTime").toDouble()));
         } else if (object.value("status").toInt() >= 400) {
-            trace(QStringLiteral("http status %1").arg(object.value("status").toInt()));
-            fail(tr("Could not load %1.").arg(QUrl(m_url).host()));
+            const int status = object.value("status").toInt();
+            trace(QStringLiteral("http status %1").arg(status));
+            m_lastError = tr("Could not load %1.").arg(QUrl(m_url).host());
+            // 403, 429 and 503 are how bot checks (Cloudflare's "Just a moment",
+            // WordPress.com's "Checking your browser") answer a first visit. The
+            // page sets a cookie and reloads itself a few seconds later, so let
+            // that reload happen instead of reporting the status as final.
+            const bool interstitial = !m_waitedForInterstitial
+                && (status == 403 || status == 429 || status == 503);
+            if (interstitial) {
+                m_waitedForInterstitial = true;
+                m_loadDone = false;
+                m_loadFailed = false;
+                m_stableTicks = 0;
+                m_domReadyAt = m_clock.elapsed();
+                return;
+            }
+            fail(m_lastError);
             return;
         } else {
             m_lastError = object.value("error").toString();

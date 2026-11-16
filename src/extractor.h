@@ -66,6 +66,7 @@ private:
     bool m_inFlight = false;
     bool m_triedEarly = false;
     bool m_patient = false;
+    bool m_waitedForInterstitial = false;
     int m_progress = 0;
     int m_generation = 0;
     int m_lastTextLength = -1;
