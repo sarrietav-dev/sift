@@ -78,7 +78,14 @@ private:
 // whether script is still changing the page's text.
 const QString kProbe = QStringLiteral(
     "(function(){var b=document.body;"
-    "return [location.protocol, document.readyState, b ? b.textContent.length : 0].join('|');})()");
+    "return [window.__siftStale ? 'stale:' : location.protocol, document.readyState,"
+    " b ? b.textContent.length : 0].join('|');})()");
+
+// Flags the document left over from the previous extraction. The hidden page
+// is reused, so until the new navigation commits the probe would otherwise
+// accept the old, fully loaded article as the new page. A fresh document has
+// no flag.
+const QString kMarkStale = QStringLiteral("window.__siftStale = true;");
 
 // Defuddle is injected as a user script when the document is created, so it
 // compiles while the HTML is still arriving and is ready the moment the DOM is.
@@ -269,6 +276,7 @@ void Extractor::extract(const QString &url) {
     if (m_page->lifecycleState() != QWebEnginePage::LifecycleState::Active)
         m_page->setLifecycleState(QWebEnginePage::LifecycleState::Active);
     m_timeout.start();
+    m_page->runJavaScript(kMarkStale, QWebEngineScript::ApplicationWorld);
     m_page->load(QUrl(target));
     m_poll.start();
     trace("load " + target);
