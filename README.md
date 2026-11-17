@@ -83,12 +83,19 @@ cd sift
 ### Start Kokoro
 
 ```sh
-docker run -d --name kokoro -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
+docker run -d --name kokoro --restart unless-stopped -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
 ```
+
+`--restart unless-stopped` keeps Kokoro up: Docker starts it again if the
+container crashes and after a reboot, as long as Docker itself is enabled.
+`docker restart kokoro` reloads it by hand; `docker stop kokoro` takes it down
+for good until you `docker start kokoro` again.
 
 sift expects `http://127.0.0.1:8880` by default; point it somewhere else under
 **Settings → Kokoro endpoint**. The GPU image,
-`ghcr.io/remsky/kokoro-fastapi-gpu:latest`, works too.
+`ghcr.io/remsky/kokoro-fastapi-gpu:latest`, works too. On a machine with rootful
+Docker, run the command with `sudo` and add yourself to Docker's group only if
+you accept that it is equivalent to root.
 
 ## Usage
 
