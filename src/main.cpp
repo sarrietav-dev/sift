@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QMap>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -32,7 +33,6 @@
 namespace {
 struct Cli {
     QString command = "gui";
-    QString subcommand;
     QString target;
     QStringList positional;
     QString filter;
@@ -48,7 +48,8 @@ Cli parseCli(int argc, char *argv[]) {
     if (args.isEmpty())
         return cli;
 
-    static const QStringList commands{"add", "list", "export", "play", "open", "queue", "help", "gui"};
+    static const QStringList commands{"add", "list", "remove", "move", "export", "play", "open", "help", "gui"};
+    static const QMap<QString, QString> aliases{{"a", "add"}, {"ls", "list"}, {"rm", "remove"}, {"mv", "move"}};
     const QString first = args.first();
     if (first == "--help" || first == "-h") {
         cli.help = true;
@@ -58,15 +59,9 @@ Cli parseCli(int argc, char *argv[]) {
         cli.command = "version";
         return cli;
     }
-    if (commands.contains(first)) {
-        cli.command = first;
+    if (commands.contains(first) || aliases.contains(first)) {
+        cli.command = aliases.value(first, first);
         args.removeFirst();
-        static const QStringList queueCommands{"add", "list", "remove", "move"};
-        if (cli.command == "queue") {
-            cli.subcommand = "list";
-            if (!args.isEmpty() && queueCommands.contains(args.first()))
-                cli.subcommand = args.takeFirst();
-        }
     } else if (first.startsWith("-")) {
         cli.help = true;
         return cli;
@@ -80,6 +75,8 @@ Cli parseCli(int argc, char *argv[]) {
         const QString arg = args.at(i);
         if (arg == "--json")
             cli.json = true;
+        else if (arg == "--all")
+            cli.filter = "all";
         else if (arg == "--unread")
             cli.filter = "unread";
         else if (arg == "--reading")
@@ -102,14 +99,14 @@ QString usage() {
         "Usage:\n"
         "  sift                              open the app\n"
         "  sift <url>                        open a page\n"
-        "  sift add <url> [--json]\n"
-        "  sift list [--unread|--reading|--read] [--json]\n"
+        "  sift add <url|id> [--json]        queue a page, fetching it if it is new (a)\n"
+        "  sift list [--json]                list the queue (ls)\n"
+        "  sift list --all|--unread|--reading|--read [--json]\n"
+        "                                    list saved pages instead of the queue\n"
+        "  sift remove <id|url|n>            take a page off the queue (rm)\n"
+        "  sift move <id|url|n> <n|top|bottom>  reorder the queue (mv)\n"
         "  sift export <id|url>              Markdown to stdout\n"
-        "  sift play <id|url>                open and start reading\n"
-        "  sift queue [--json]               list the queue\n"
-        "  sift queue add <url|id> [--json]  queue a page, fetching it if it is new\n"
-        "  sift queue remove <id|url|n>      take a page off the queue\n"
-        "  sift queue move <id|url|n> <n|top|bottom>\n\n"
+        "  sift play <id|url>                open and start reading\n\n"
         "The Kokoro endpoint is configured in sift's Settings.\n");
 }
 
@@ -149,11 +146,56 @@ QString articleIdFor(Library &library, const QString &target) {
     return target;
 }
 
+// Accepts an article id, a saved URL, or a 1-based queue position.
+int queueIndexFor(Library &library, const QString &target) {
+    const QVariantList queue = library.queue();
+    bool numeric = false;
+    const int position = target.toInt(&numeric);
+    if (numeric && QString::number(position) == target)
+        return position >= 1 && position <= queue.size() ? position - 1 : -1;
+    const QString id = articleIdFor(library, target);
+    for (int i = 0; i < queue.size(); ++i) {
+        if (queue.at(i).toMap().value("id").toString() == id)
+            return i;
+    }
+    return -1;
+}
+
+void printQueue(Library &library, bool json) {
+    const QVariantList queue = library.queue();
+    if (json) {
+        QJsonArray array;
+        for (int i = 0; i < queue.size(); ++i) {
+            const QVariantMap article = queue.at(i).toMap();
+            QJsonObject object;
+            object["position"] = i + 1;
+            object["id"] = article.value("id").toString();
+            object["title"] = article.value("title").toString();
+            object["url"] = article.value("url").toString();
+            object["domain"] = article.value("domain").toString();
+            array.append(object);
+        }
+        QTextStream(stdout) << QJsonDocument(array).toJson(QJsonDocument::Indented);
+        return;
+    }
+    for (int i = 0; i < queue.size(); ++i) {
+        const QVariantMap article = queue.at(i).toMap();
+        QTextStream(stdout) << QString::number(i + 1).rightJustified(3) << "  "
+                            << article.value("title").toString() << "  "
+                            << article.value("domain").toString() << "  "
+                            << article.value("id").toString() << '\n';
+    }
+}
+
 int runList(const Cli &cli, int argc, char **argv) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
     Library library;
-    const QVariantList articles = library.articles(cli.filter.isEmpty() ? "all" : cli.filter);
+    if (cli.filter.isEmpty()) {
+        printQueue(library, cli.json);
+        return 0;
+    }
+    const QVariantList articles = library.articles(cli.filter);
     if (cli.json) {
         QJsonArray array;
         for (const QVariant &entry : articles) {
@@ -231,61 +273,16 @@ bool extractAndSave(Library &library, const QString &url, QString *id, QVariantM
     return ok;
 }
 
-// Accepts an article id, a saved URL, or a 1-based queue position.
-int queueIndexFor(Library &library, const QString &target) {
-    const QVariantList queue = library.queue();
-    bool numeric = false;
-    const int position = target.toInt(&numeric);
-    if (numeric && QString::number(position) == target)
-        return position >= 1 && position <= queue.size() ? position - 1 : -1;
-    const QString id = articleIdFor(library, target);
-    for (int i = 0; i < queue.size(); ++i) {
-        if (queue.at(i).toMap().value("id").toString() == id)
-            return i;
-    }
-    return -1;
-}
-
-void printQueue(Library &library, bool json) {
-    const QVariantList queue = library.queue();
-    if (json) {
-        QJsonArray array;
-        for (int i = 0; i < queue.size(); ++i) {
-            const QVariantMap article = queue.at(i).toMap();
-            QJsonObject object;
-            object["position"] = i + 1;
-            object["id"] = article.value("id").toString();
-            object["title"] = article.value("title").toString();
-            object["url"] = article.value("url").toString();
-            object["domain"] = article.value("domain").toString();
-            array.append(object);
-        }
-        QTextStream(stdout) << QJsonDocument(array).toJson(QJsonDocument::Indented);
-        return;
-    }
-    for (int i = 0; i < queue.size(); ++i) {
-        const QVariantMap article = queue.at(i).toMap();
-        QTextStream(stdout) << QString::number(i + 1).rightJustified(3) << "  "
-                            << article.value("title").toString() << "  "
-                            << article.value("domain").toString() << "  "
-                            << article.value("id").toString() << '\n';
-    }
-}
-
-int runQueue(const Cli &cli, int argc, char **argv) {
+int runQueueEdit(const Cli &cli, int argc, char **argv) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
     Library library;
 
-    if (cli.subcommand == "list") {
-        printQueue(library, cli.json);
-        return 0;
-    }
     if (cli.target.isEmpty()) {
         QTextStream(stderr) << usage();
         return 1;
     }
-    if (cli.subcommand == "remove") {
+    if (cli.command == "remove") {
         const int index = queueIndexFor(library, cli.target);
         if (index < 0) {
             QTextStream(stderr) << "sift: " << cli.target << " is not in the queue\n";
@@ -295,7 +292,7 @@ int runQueue(const Cli &cli, int argc, char **argv) {
         notifyRefresh();
         return 0;
     }
-    if (cli.subcommand == "move") {
+    if (cli.command == "move") {
         const int from = queueIndexFor(library, cli.target);
         const int count = library.queue().size();
         if (from < 0) {
@@ -325,7 +322,7 @@ int runQueue(const Cli &cli, int argc, char **argv) {
 
 // Queues a saved page, or fetches and saves a new URL first. Fetching needs
 // WebEngine, so this runs under a QGuiApplication on the offscreen platform.
-int runQueueAdd(const Cli &cli, int argc, char **argv) {
+int runAdd(const Cli &cli, int argc, char **argv) {
     QtWebEngineQuick::initialize();
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName("sift");
@@ -357,32 +354,6 @@ int runQueueAdd(const Cli &cli, int argc, char **argv) {
         QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
     } else {
         QTextStream(stdout) << title << '\n';
-    }
-    return 0;
-}
-
-int runAdd(const Cli &cli, int argc, char **argv) {
-    QtWebEngineQuick::initialize();
-    QGuiApplication app(argc, argv);
-    QCoreApplication::setApplicationName("sift");
-    QCoreApplication::setApplicationVersion("0.1.7");
-
-    Library library;
-    QString id;
-    QVariantMap article;
-    if (!extractAndSave(library, cli.target, &id, &article))
-        return 1;
-    notifyRefresh();
-    if (cli.json) {
-        QJsonObject object;
-        object["ok"] = true;
-        object["id"] = id;
-        object["title"] = article.value("title").toString();
-        object["url"] = article.value("url").toString();
-        object["markdown"] = library.article(id).value("markdownPath").toString();
-        QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
-    } else {
-        QTextStream(stdout) << article.value("title").toString() << '\n';
     }
     return 0;
 }
@@ -497,22 +468,20 @@ int main(int argc, char *argv[]) {
         return runList(cli, argc, argv);
     if (cli.command == "export")
         return runExport(cli, argc, argv);
-    if (cli.command == "queue" && cli.subcommand != "add")
-        return runQueue(cli, argc, argv);
-    if (cli.command == "add" || cli.command == "queue") {
+    if (cli.command == "remove" || cli.command == "move")
+        return runQueueEdit(cli, argc, argv);
+    if (cli.command == "add") {
+        if (cli.target.isEmpty()) {
+            QTextStream(stderr) << usage();
+            return 1;
+        }
         // Fetching pages needs WebEngine but no window.
         qputenv("QT_QPA_PLATFORM", "offscreen");
         QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
         if (!flags.contains("--disable-gpu"))
             flags += " --disable-gpu";
         qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
-        if (cli.command == "add")
-            return runAdd(cli, argc, argv);
-        if (cli.target.isEmpty()) {
-            QTextStream(stderr) << usage();
-            return 1;
-        }
-        return runQueueAdd(cli, argc, argv);
+        return runAdd(cli, argc, argv);
     }
 
     QtWebEngineQuick::initialize();

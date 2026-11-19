@@ -26,7 +26,7 @@ for [Omarchy](https://omarchy.org).
   sentence it is reading, preloads the next paragraph, and caches audio per
   voice, speed, and text.
 - **A real queue.** Add pages from the app or the CLI, let sift advance
-  automatically, and reorder by drag, keyboard, or `sift queue move`.
+  automatically, and reorder by drag, keyboard, or `sift move`.
 - **Keeps your place.** Every article is saved as an HTML snapshot plus
   Markdown, with the last sentence remembered, so reopening sift continues
   where you stopped.
@@ -102,20 +102,19 @@ you accept that it is equivalent to root.
 ```sh
 sift                              # open the app
 sift <url>                        # open a page and start reading it
-sift add <url>                    # clip a page without opening the window
-sift list [--unread|--reading|--read]
+sift add <url|id>                 # queue a page, fetching it if it is new (a)
+sift list                         # list the queue (ls)
+sift list --all|--unread|--reading|--read   # list saved pages instead
+sift remove <id|url|n>            # take a page off the queue (rm)
+sift move <id|url|n> <n|top|bottom>   # reorder the queue (mv)
 sift play <id|url>                # open and start reading
 sift export <id|url>              # Markdown to stdout
-sift queue                        # list the queue
-sift queue add <url|id>           # queue a page, fetching it if it is new
-sift queue remove <id|url|n>      # take a page off the queue
-sift queue move <id|url|n> <n|top|bottom>
 ```
 
-`add`, `list`, and the `queue` commands accept `--json`. `add` saves a page
-without queueing it; `queue add` fetches and saves a new URL before queueing,
-or queues a page you have already saved. Queue positions start at 1. A running
-app refreshes itself after any of these commands.
+`add`, `list`, `remove`, and `move` work on the queue and accept `--json`
+where they print something. `add` fetches and saves a new URL before queueing
+it, or queues a page you have already saved. Queue positions start at 1. A
+running app refreshes itself after any of these commands.
 
 ### Keyboard
 
