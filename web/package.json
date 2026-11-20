@@ -1,0 +1,15 @@
+{
+  "name": "sift-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun server.js",
+    "test": "bun test"
+  },
+  "engines": { "bun": ">=1.2" },
+  "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
+    "defuddle": "0.19.11",
+    "linkedom": "0.18.15"
+  }
+}
