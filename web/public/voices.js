@@ -16,6 +16,18 @@ const LANGUAGES = [
 ];
 const OTHER = { prefix: "", name: "Other", short: "", search: "", codes: [] };
 const SAMPLE = "Hello. This is how I sound reading to you.";
+// Kokoro voices only sound right in their own language, so a preview of a
+// Spanish voice has to speak Spanish even when the article is in English.
+const SAMPLES = {
+    en: SAMPLE,
+    es: "Hola. Así suena mi voz cuando te leo.",
+    fr: "Bonjour. Voici ma voix quand je vous fais la lecture.",
+    hi: "नमस्ते। पढ़ते समय मेरी आवाज़ ऐसी है।",
+    it: "Ciao. Questa è la mia voce quando ti leggo.",
+    ja: "こんにちは。朗読するときの私の声です。",
+    pt: "Olá. Esta é a minha voz quando leio para você.",
+    zh: "你好。这是我朗读时的声音。",
+};
 const RECENT_LIMIT = 3;
 
 export function describeVoice(id) {
@@ -40,12 +52,25 @@ export function describeVoice(id) {
 }
 
 // Long sentences make slow previews; a couple of lines is enough to judge a voice.
-export function previewText(text) {
+function shorten(text) {
     const clean = (text || "").replace(/\s+/g, " ").trim();
-    if (!clean) return SAMPLE;
     if (clean.length <= 240) return clean;
     const cut = clean.slice(0, 240);
     return cut.slice(0, cut.lastIndexOf(" ") > 120 ? cut.lastIndexOf(" ") : 240) + "…";
+}
+
+function languageCode(value) {
+    return (value || "").toLowerCase().split(/[-_]/)[0];
+}
+
+// Reads the article sentence only when it is already in the voice's language;
+// any other voice gets a sample in its own language.
+export function previewText(text, voiceCodes = ["en"], textLanguage = "en") {
+    const language = languageCode(voiceCodes[0]);
+    const sample = SAMPLES[language];
+    if (!sample) return shorten(text) || SAMPLE;
+    if (language === languageCode(textLanguage || "en")) return shorten(text) || sample;
+    return sample;
 }
 
 function icon(id) {
@@ -249,7 +274,7 @@ export class VoicePicker {
         this.previewState = "loading";
         this.markPreview();
         if (this.onPreviewStart()) this.resumeAfter = true;
-        const entry = this.store.preview(previewText(this.sentence()), id, this.speed());
+        const entry = this.store.preview(previewText(this.sentence(), describeVoice(id).language.codes, this.language()), id, this.speed());
         let url;
         try {
             url = await entry.promise;

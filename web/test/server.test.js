@@ -102,6 +102,16 @@ describe("voice picker helpers", () => {
         expect(long.length).toBeLessThanOrEqual(241);
         expect(long.endsWith("…")).toBe(true);
     });
+
+    test("a voice previews in its own language, not the article's", () => {
+        const article = "The quick brown fox jumps over the lazy dog.";
+        expect(previewText(article, describeVoice("ef_dora").language.codes, "en")).toBe("Hola. Así suena mi voz cuando te leo.");
+        expect(previewText(article, describeVoice("bf_emma").language.codes, "es")).toBe("Hello. This is how I sound reading to you.");
+        expect(previewText("El zorro salta.", describeVoice("ef_dora").language.codes, "es")).toBe("El zorro salta.");
+        for (const [id, start] of [["ff_siwis", "Bonjour"], ["if_sara", "Ciao"], ["jf_alpha", "こんにちは"], ["pf_dora", "Olá"], ["zf_xiaobei", "你好"], ["hf_alpha", "नमस्ते"]])
+            expect(previewText(article, describeVoice(id).language.codes, "en").startsWith(start)).toBe(true);
+        expect(previewText(article, describeVoice("of_x").language.codes, "en")).toBe(article);
+    });
 });
 
 test("private addresses are refused", () => {
