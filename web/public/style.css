@@ -225,13 +225,15 @@ body.playing .play .icon-pause { display: block; }
     opacity: 0; transition: opacity 150ms ease;
 }
 body.buffering .play .buffer { opacity: 1; animation: spin 800ms linear infinite; }
-.speed-button {
-    justify-self: end; min-width: 44px; height: 36px; padding: 0 0.7rem;
-    border-radius: 18px; color: var(--tx-2); font-size: 0.9rem; font-weight: 600;
-    font-variant-numeric: tabular-nums;
+.options-button { position: relative; justify-self: end; }
+.options-button[aria-expanded="true"] { background: var(--ui); color: var(--tx); }
+.speed-badge {
+    position: absolute; right: -4px; bottom: -3px;
+    padding: 0 0.3rem; border-radius: 999px;
+    background: var(--accent); color: var(--bg);
+    font-size: 0.66rem; font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums;
+    pointer-events: none;
 }
-.speed-button[aria-expanded="true"], .speed-button:active { background: var(--ui); color: var(--tx); }
-@media (hover: hover) { .speed-button:hover { background: var(--bg-2); color: var(--tx); } }
 .player button:disabled { opacity: 0.35; }
 
 @keyframes spin { to { transform: rotate(360deg); } }

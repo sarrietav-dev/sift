@@ -527,7 +527,11 @@ function formatSpeed(speed) {
 }
 
 function renderSpeed() {
-    $("options-button").textContent = formatSpeed(state.speed);
+    // The options button is an icon; a badge shows the speed only when it
+    // is not the normal 1×, so a changed speed stays visible on the player.
+    const badge = $("speed-badge");
+    badge.textContent = formatSpeed(state.speed);
+    badge.hidden = Math.abs(state.speed - 1) < 0.001;
     $("speed-value").textContent = state.speed.toFixed(2) + "×";
 }
 

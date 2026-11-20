@@ -6,8 +6,8 @@ process serves the page, extracts articles with
 proxies speech to a private Kokoro-FastAPI container.
 
 - The player has previous, play/pause, and next sentence. The button on the
-  left opens the queue; the speed button on the right opens speed, voice, and
-  text size.
+  left opens the queue; the sliders button on the right opens speed, voice,
+  and text size, and carries a small badge with the speed when it is not 1×.
 - The voice row in that sheet opens a picker grouped by language, with the
   article's language first and your last three voices on top. Search matches
   name, language, or gender. Each voice has a preview button that reads the
