@@ -28,6 +28,12 @@ switch exists only in the test process. `SIFT_GUI_SCREENSHOT`,
 `SIFT_GUI_MENU_SCREENSHOT`, `SIFT_GUI_SETTINGS_SCREENSHOT`, and
 `SIFT_GUI_DROPDOWN_SCREENSHOT` save PNGs for visual checks.
 
+`web/` is a separate Bun app (sift for the phone): `bun install`, `bun test`,
+`bun server.js`. It shares no build with the Qt app, but keeps the desktop
+database schema and ports `src/reader.js` sentence wrapping and
+`TtsEngine::prefetchIndices`; change those in both places. See
+`web/README.md` for deploy steps.
+
 The demo video is a separate Remotion project in `video/` (`npm i`,
 `npm run dev`, `npm run lint`, `npm run render`); it shares no toolchain with
 the app.
