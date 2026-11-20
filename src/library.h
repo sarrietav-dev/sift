@@ -59,6 +59,16 @@ public:
 
     QString markdownFor(const QString &id) const;
 
+    // Writes a consistent copy of the index with VACUUM INTO, which works
+    // while the app is running.
+    bool exportSnapshot(const QString &path, QString *error = nullptr);
+    // Merges another machine's snapshot into this library. Per article, the
+    // newer metadata wins and progress follows the most recent play; the queue
+    // keeps the newer order and appends items only the other side has.
+    // Settings stay local, so endpoints and save folders do not travel.
+    bool mergeSnapshot(const QString &path, QVariantMap *summary = nullptr,
+                       QString *error = nullptr);
+
 signals:
     void changed();
 
@@ -75,6 +85,7 @@ private:
                                const QString &oldPath, const QString &oldHash) const;
     void updateFts(const QString &id, const QVariantMap &data);
     void removeFts(const QString &id);
+    void touchQueue();
     QVariantMap rowToArticle(const QSqlQuery &query) const;
     QStringList tagsFor(const QString &articleId) const;
     static QString slug(const QString &title);

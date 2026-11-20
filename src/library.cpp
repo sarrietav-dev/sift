@@ -5,7 +5,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSaveFile>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -25,6 +27,33 @@ QString cleanText(const QString &text)
     QString value = text;
     value.replace(QRegularExpression("\\s+"), " ");
     return value.trimmed();
+}
+
+// The article columns that travel between machines. Paths are handled
+// separately because each machine stores them under its own home directory.
+const QStringList &articleColumns()
+{
+    static const QStringList columns{
+        "id", "url", "canonical_url", "title", "author", "published", "domain",
+        "language", "word_count", "excerpt", "content_text", "clipped_at",
+        "updated_at", "read_state", "last_sentence", "last_played_at",
+        "content_hash", "file_hash"};
+    return columns;
+}
+
+QVariantMap readArticleRow(QSqlQuery &query)
+{
+    QVariantMap row;
+    for (const QString &column : articleColumns())
+        row[column] = query.value(column);
+    return row;
+}
+
+QString quoteSql(const QString &value)
+{
+    QString escaped = value;
+    escaped.replace('\'', "''");
+    return "'" + escaped + "'";
 }
 }
 
@@ -657,6 +686,14 @@ bool Library::deleteArticle(const QString &id) {
         }
     }
 
+    bool wasQueued = false;
+    {
+        QSqlQuery queued(m_db);
+        queued.prepare("SELECT 1 FROM queue WHERE article_id = ?");
+        queued.addBindValue(id);
+        wasQueued = queued.exec() && queued.next();
+    }
+
     QSqlQuery query(m_db);
     query.prepare("DELETE FROM article_tags WHERE article_id = ?");
     query.addBindValue(id);
@@ -671,6 +708,8 @@ bool Library::deleteArticle(const QString &id) {
     query.addBindValue(id);
     query.exec();
     removeFts(id);
+    if (wasQueued)
+        touchQueue();
     emit changed();
     return true;
 }
@@ -961,6 +1000,7 @@ void Library::setQueue(const QStringList &articleIds) {
         insert.exec();
     }
     m_db.commit();
+    touchQueue();
     emit changed();
 }
 
@@ -982,8 +1022,10 @@ bool Library::addToQueue(const QString &articleId) {
     insert.addBindValue(next);
     insert.addBindValue(articleId);
     const bool ok = insert.exec();
-    if (ok)
+    if (ok) {
+        touchQueue();
         emit changed();
+    }
     return ok;
 }
 
@@ -1017,6 +1059,7 @@ bool Library::removeFromQueue(const QString &articleId) {
             insert.exec();
         }
         m_db.commit();
+        touchQueue();
         emit changed();
     }
     return ok;
@@ -1043,6 +1086,7 @@ bool Library::moveQueueItem(int from, int to) {
         insert.exec();
     }
     m_db.commit();
+    touchQueue();
     emit changed();
     return true;
 }
@@ -1076,7 +1120,12 @@ bool Library::sortQueue(const QString &mode) {
 void Library::clearQueue() {
     QSqlQuery query(m_db);
     query.exec("DELETE FROM queue");
+    touchQueue();
     emit changed();
+}
+
+void Library::touchQueue() {
+    setSetting("queue_updated_at", now());
 }
 
 QString Library::setting(const QString &key, const QString &fallback) const {
@@ -1099,4 +1148,496 @@ void Library::setSetting(const QString &key, const QString &value) {
     query.addBindValue(key);
     query.addBindValue(value);
     query.exec();
+}
+
+bool Library::exportSnapshot(const QString &path, QString *error) {
+    auto fail = [&](const QString &message) {
+        if (error)
+            *error = message;
+        return false;
+    };
+    if (!m_db.isOpen())
+        return fail(QStringLiteral("the library is not open"));
+    if (path.trimmed().isEmpty())
+        return fail(QStringLiteral("no destination given"));
+
+    const QString target = QFileInfo(path).absoluteFilePath();
+    if (target == QFileInfo(m_db.databaseName()).absoluteFilePath())
+        return fail(QStringLiteral("refusing to overwrite the live library"));
+
+    QDir().mkpath(QFileInfo(target).absolutePath());
+    QFile::remove(target);
+    QFile::remove(target + "-wal");
+    QFile::remove(target + "-shm");
+
+    // VACUUM INTO writes a fresh, fully checkpointed database, so the copy is
+    // consistent even while the app is reading and writing the original.
+    QSqlQuery query(m_db);
+    if (!query.exec("VACUUM INTO " + quoteSql(target)))
+        return fail(query.lastError().text());
+    return true;
+}
+
+bool Library::mergeSnapshot(const QString &path, QVariantMap *summary, QString *error) {
+    auto fail = [&](const QString &message) {
+        if (error)
+            *error = message;
+        return false;
+    };
+    if (!m_db.isOpen())
+        return fail(QStringLiteral("the library is not open"));
+
+    const QString snapshot = QFileInfo(path).absoluteFilePath();
+    if (!QFileInfo::exists(snapshot))
+        return fail(QStringLiteral("no snapshot at %1").arg(path));
+    if (snapshot == QFileInfo(m_db.databaseName()).absoluteFilePath())
+        return fail(QStringLiteral("that is the live library, not a snapshot"));
+
+    {
+        QSqlQuery pragma(m_db);
+        pragma.exec("PRAGMA busy_timeout=5000");
+    }
+
+    QSqlQuery attach(m_db);
+    attach.prepare("ATTACH DATABASE ? AS peer");
+    attach.addBindValue(snapshot);
+    if (!attach.exec())
+        return fail(attach.lastError().text());
+
+    auto detach = [&] {
+        QSqlQuery query(m_db);
+        query.exec("DETACH DATABASE peer");
+    };
+
+    int localVersion = 0;
+    int peerVersion = 0;
+    {
+        QSqlQuery local(m_db);
+        if (local.exec("PRAGMA user_version") && local.next())
+            localVersion = local.value(0).toInt();
+        QSqlQuery peer(m_db);
+        if (peer.exec("PRAGMA peer.user_version") && peer.next())
+            peerVersion = peer.value(0).toInt();
+    }
+    if (localVersion != peerVersion) {
+        detach();
+        return fail(QStringLiteral("snapshot schema %1 does not match this library (%2); "
+                                   "update sift on both machines")
+                        .arg(peerVersion).arg(localVersion));
+    }
+
+    {
+        QSqlQuery check(m_db);
+        if (!check.exec("SELECT 1 FROM peer.articles LIMIT 1")) {
+            detach();
+            return fail(QStringLiteral("that file is not a sift snapshot"));
+        }
+    }
+
+    if (!m_db.transaction()) {
+        detach();
+        return fail(QStringLiteral("could not start a merge transaction"));
+    }
+
+    auto abortMerge = [&](const QString &message) {
+        m_db.rollback();
+        detach();
+        return fail(message);
+    };
+
+    const QString localStamp = setting("queue_updated_at");
+    QString peerStamp;
+    {
+        QSqlQuery query(m_db);
+        query.exec("SELECT value FROM peer.settings WHERE key = 'queue_updated_at'");
+        if (query.next())
+            peerStamp = query.value(0).toString();
+    }
+
+    QSet<QString> localIds;
+    QHash<QString, QString> byCanonical;
+    QHash<QString, QString> byUrl;
+    {
+        QSqlQuery query(m_db);
+        if (!query.exec("SELECT id, canonical_url, url FROM articles ORDER BY updated_at DESC"))
+            return abortMerge(query.lastError().text());
+        while (query.next()) {
+            const QString id = query.value(0).toString();
+            const QString canonical = query.value(1).toString();
+            const QString url = query.value(2).toString();
+            localIds.insert(id);
+            if (!canonical.isEmpty() && !byCanonical.contains(canonical))
+                byCanonical.insert(canonical, id);
+            if (!url.isEmpty() && !byUrl.contains(url))
+                byUrl.insert(url, id);
+        }
+    }
+
+    QHash<QString, QStringList> peerTags;
+    {
+        QSqlQuery query(m_db);
+        if (!query.exec("SELECT at.article_id, t.name FROM peer.article_tags at "
+                        "JOIN peer.tags t ON t.id = at.tag_id"))
+            return abortMerge(query.lastError().text());
+        while (query.next())
+            peerTags[query.value(0).toString()].append(query.value(1).toString());
+    }
+
+    QHash<QString, QString> idMap;
+    QHash<QString, qint64> tagIds;
+    int added = 0;
+    int updated = 0;
+    int deduped = 0;
+
+    {
+        QSqlQuery peer(m_db);
+        if (!peer.exec("SELECT " + articleColumns().join(", ") + " FROM peer.articles"))
+            return abortMerge(peer.lastError().text());
+
+        QSqlQuery localRow(m_db);
+        localRow.prepare("SELECT " + articleColumns().join(", ")
+                         + ", content_path, markdown_path FROM articles WHERE id = ?");
+
+        QSqlQuery insert(m_db);
+        insert.prepare("INSERT INTO articles (id, url, canonical_url, title, author, published, domain, "
+                       "language, word_count, excerpt, content_text, clipped_at, updated_at, read_state, "
+                       "last_sentence, last_played_at, content_hash, file_hash, content_path, markdown_path) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+        QSqlQuery update(m_db);
+        update.prepare("UPDATE articles SET url=?, canonical_url=?, title=?, author=?, published=?, "
+                       "domain=?, language=?, word_count=?, excerpt=?, content_text=?, clipped_at=?, "
+                       "updated_at=?, read_state=?, last_sentence=?, last_played_at=?, content_hash=?, "
+                       "file_hash=?, content_path=?, markdown_path=? WHERE id=?");
+
+        while (peer.next()) {
+            const QVariantMap incoming = readArticleRow(peer);
+            const QString peerId = incoming.value("id").toString();
+            if (peerId.isEmpty())
+                continue;
+
+            const QString canonical = incoming.value("canonical_url").toString();
+            const QString url = incoming.value("url").toString();
+
+            QString localId;
+            if (localIds.contains(peerId))
+                localId = peerId;
+            else if (!canonical.isEmpty() && byCanonical.contains(canonical))
+                localId = byCanonical.value(canonical);
+            else if (!url.isEmpty() && byUrl.contains(url))
+                localId = byUrl.value(url);
+            if (localId.isEmpty())
+                localId = peerId;
+
+            QVariantMap local;
+            if (localIds.contains(localId)) {
+                localRow.addBindValue(localId);
+                if (!localRow.exec())
+                    return abortMerge(localRow.lastError().text());
+                if (localRow.next()) {
+                    local = readArticleRow(localRow);
+                    local["content_path"] = localRow.value("content_path");
+                    local["markdown_path"] = localRow.value("markdown_path");
+                }
+                localRow.finish();
+            }
+
+            if (localId != peerId)
+                ++deduped;
+
+            const QString peerUpdated = incoming.value("updated_at").toString();
+            const QString localUpdated = local.value("updated_at").toString();
+            const bool peerNewer = local.isEmpty() || peerUpdated > localUpdated;
+
+            auto pick = [&](const QString &column) -> QVariant {
+                return peerNewer ? incoming.value(column) : local.value(column);
+            };
+
+            // The clip date is the first time the page entered the library,
+            // so the older date survives a re-clip on another machine.
+            QString clipped = local.value("clipped_at").toString();
+            const QString peerClipped = incoming.value("clipped_at").toString();
+            if (clipped.isEmpty() || (!peerClipped.isEmpty() && peerClipped < clipped))
+                clipped = peerClipped;
+
+            QString updatedAt = peerNewer ? peerUpdated : localUpdated;
+            if (updatedAt.isEmpty())
+                updatedAt = now();
+
+            // Progress follows the latest play, so restarting an article on
+            // one machine wins over an older sentence elsewhere.
+            const QString localPlayed = local.value("last_played_at").toString();
+            const QString peerPlayed = incoming.value("last_played_at").toString();
+            const bool peerPlayedLater = !peerPlayed.isEmpty()
+                && (localPlayed.isEmpty() || peerPlayed > localPlayed);
+            const QVariant lastPlayed = peerPlayedLater ? incoming.value("last_played_at")
+                                                        : local.value("last_played_at");
+            const int lastSentence = (peerPlayedLater ? incoming.value("last_sentence")
+                                                      : local.value("last_sentence")).toInt();
+            const int readState = qMax(local.value("read_state").toInt(),
+                                       incoming.value("read_state").toInt());
+
+            QString contentPath = local.value("content_path").toString();
+            if (contentPath.isEmpty())
+                contentPath = m_dataDirectory + "/articles/" + localId + "/content.html";
+
+            QString markdownPath = local.value("markdown_path").toString();
+            if (markdownPath.isEmpty()) {
+                markdownPath = incoming.value("markdown_path").toString();
+                if (!markdownPath.isEmpty() && !QFileInfo::exists(markdownPath))
+                    markdownPath = saveDirectory() + "/" + QFileInfo(markdownPath).fileName();
+                if (markdownPath.isEmpty())
+                    markdownPath = saveDirectory() + "/" + localId + ".md";
+            }
+
+            QVariantMap merged;
+            merged["id"] = localId;
+            merged["url"] = pick("url");
+            merged["canonical_url"] = pick("canonical_url");
+            merged["title"] = pick("title");
+            merged["author"] = pick("author");
+            merged["published"] = pick("published");
+            merged["domain"] = pick("domain");
+            merged["language"] = pick("language");
+            merged["word_count"] = pick("word_count");
+            merged["excerpt"] = pick("excerpt");
+            merged["content_text"] = pick("content_text");
+            merged["clipped_at"] = clipped;
+            merged["updated_at"] = updatedAt;
+            merged["read_state"] = readState;
+            merged["last_sentence"] = lastSentence;
+            merged["last_played_at"] = lastPlayed;
+            merged["content_hash"] = pick("content_hash");
+            merged["file_hash"] = pick("file_hash");
+
+            if (local.isEmpty()) {
+                QDir().mkpath(m_dataDirectory + "/articles/" + localId);
+                for (const QString &column : articleColumns())
+                    insert.addBindValue(merged.value(column));
+                insert.addBindValue(contentPath);
+                insert.addBindValue(markdownPath);
+                if (!insert.exec())
+                    return abortMerge(insert.lastError().text());
+                insert.finish();
+                localIds.insert(localId);
+                if (!canonical.isEmpty() && !byCanonical.contains(canonical))
+                    byCanonical.insert(canonical, localId);
+                if (!url.isEmpty() && !byUrl.contains(url))
+                    byUrl.insert(url, localId);
+                ++added;
+            } else {
+                bool changed = false;
+                for (const QString &column : articleColumns().mid(1)) {
+                    if (merged.value(column).toString() != local.value(column).toString()) {
+                        changed = true;
+                        break;
+                    }
+                }
+                if (contentPath != local.value("content_path").toString()
+                    || markdownPath != local.value("markdown_path").toString())
+                    changed = true;
+                if (changed) {
+                    for (const QString &column : articleColumns().mid(1))
+                        update.addBindValue(merged.value(column));
+                    update.addBindValue(contentPath);
+                    update.addBindValue(markdownPath);
+                    update.addBindValue(localId);
+                    if (!update.exec())
+                        return abortMerge(update.lastError().text());
+                    update.finish();
+                    ++updated;
+                }
+            }
+
+            idMap.insert(peerId, localId);
+
+            for (const QString &name : peerTags.value(peerId)) {
+                qint64 tagId = tagIds.value(name, 0);
+                if (tagId == 0) {
+                    QSqlQuery insertTag(m_db);
+                    insertTag.prepare("INSERT OR IGNORE INTO tags(name) VALUES (?)");
+                    insertTag.addBindValue(name);
+                    if (!insertTag.exec())
+                        return abortMerge(insertTag.lastError().text());
+                    QSqlQuery lookup(m_db);
+                    lookup.prepare("SELECT id FROM tags WHERE name = ? COLLATE NOCASE");
+                    lookup.addBindValue(name);
+                    if (lookup.exec() && lookup.next())
+                        tagId = lookup.value(0).toLongLong();
+                    tagIds.insert(name, tagId);
+                }
+                if (tagId == 0)
+                    continue;
+                QSqlQuery link(m_db);
+                link.prepare("INSERT OR IGNORE INTO article_tags(article_id, tag_id) VALUES (?, ?)");
+                link.addBindValue(localId);
+                link.addBindValue(tagId);
+                if (!link.exec())
+                    return abortMerge(link.lastError().text());
+            }
+        }
+    }
+
+    {
+        QSqlQuery playlists(m_db);
+        if (!playlists.exec("SELECT id, name, created_at, updated_at FROM peer.playlists"))
+            return abortMerge(playlists.lastError().text());
+        while (playlists.next()) {
+            const QString id = playlists.value(0).toString();
+            const QString name = playlists.value(1).toString();
+            const QString createdAt = playlists.value(2).toString();
+            const QString updatedAt = playlists.value(3).toString();
+
+            QSqlQuery existing(m_db);
+            existing.prepare("SELECT updated_at FROM playlists WHERE id = ?");
+            existing.addBindValue(id);
+            if (existing.exec() && existing.next()) {
+                if (updatedAt > existing.value(0).toString()) {
+                    QSqlQuery update(m_db);
+                    update.prepare("UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?");
+                    update.addBindValue(name);
+                    update.addBindValue(updatedAt);
+                    update.addBindValue(id);
+                    if (!update.exec())
+                        return abortMerge(update.lastError().text());
+                }
+            } else {
+                QSqlQuery insert(m_db);
+                insert.prepare("INSERT INTO playlists(id, name, created_at, updated_at) VALUES (?, ?, ?, ?)");
+                insert.addBindValue(id);
+                insert.addBindValue(name);
+                insert.addBindValue(createdAt);
+                insert.addBindValue(updatedAt);
+                if (!insert.exec())
+                    return abortMerge(insert.lastError().text());
+            }
+        }
+    }
+
+    {
+        QSqlQuery items(m_db);
+        if (!items.exec("SELECT playlist_id, article_id, position FROM peer.playlist_items "
+                        "ORDER BY playlist_id, position"))
+            return abortMerge(items.lastError().text());
+        while (items.next()) {
+            const QString playlistId = items.value(0).toString();
+            const QString articleId = idMap.value(items.value(1).toString(),
+                                                  items.value(1).toString());
+            if (!localIds.contains(articleId))
+                continue;
+
+            QSqlQuery exists(m_db);
+            exists.prepare("SELECT 1 FROM playlist_items WHERE playlist_id = ? AND article_id = ?");
+            exists.addBindValue(playlistId);
+            exists.addBindValue(articleId);
+            if (exists.exec() && exists.next())
+                continue;
+
+            int position = 0;
+            QSqlQuery next(m_db);
+            next.prepare("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_items "
+                         "WHERE playlist_id = ?");
+            next.addBindValue(playlistId);
+            if (next.exec() && next.next())
+                position = next.value(0).toInt();
+
+            QSqlQuery insert(m_db);
+            insert.prepare("INSERT INTO playlist_items(playlist_id, article_id, position) "
+                           "VALUES (?, ?, ?)");
+            insert.addBindValue(playlistId);
+            insert.addBindValue(articleId);
+            insert.addBindValue(position);
+            if (!insert.exec())
+                return abortMerge(insert.lastError().text());
+        }
+    }
+
+    QStringList localQueue;
+    {
+        QSqlQuery query(m_db);
+        if (!query.exec("SELECT article_id FROM queue ORDER BY position"))
+            return abortMerge(query.lastError().text());
+        while (query.next())
+            localQueue << query.value(0).toString();
+    }
+    QStringList peerQueue;
+    {
+        QSqlQuery query(m_db);
+        if (!query.exec("SELECT article_id FROM peer.queue ORDER BY position"))
+            return abortMerge(query.lastError().text());
+        while (query.next()) {
+            const QString id = query.value(0).toString();
+            peerQueue << idMap.value(id, id);
+        }
+    }
+
+    // The queue is a manual order, so the newer order wins and anything only
+    // the other machine had is appended instead of dropped.
+    const bool peerQueueNewer = !peerStamp.isEmpty()
+        && (localStamp.isEmpty() || peerStamp > localStamp);
+    const QStringList &base = peerQueueNewer ? peerQueue : localQueue;
+    const QStringList &extra = peerQueueNewer ? localQueue : peerQueue;
+
+    QStringList mergedQueue;
+    QSet<QString> seen;
+    auto appendQueue = [&](const QStringList &ids) {
+        for (const QString &id : ids) {
+            if (!localIds.contains(id) || seen.contains(id))
+                continue;
+            seen.insert(id);
+            mergedQueue << id;
+        }
+    };
+    appendQueue(base);
+    appendQueue(extra);
+
+    const bool queueChanged = mergedQueue != localQueue;
+    if (queueChanged) {
+        QSqlQuery clear(m_db);
+        if (!clear.exec("DELETE FROM queue"))
+            return abortMerge(clear.lastError().text());
+        QSqlQuery insert(m_db);
+        insert.prepare("INSERT INTO queue(position, article_id) VALUES (?, ?)");
+        for (int i = 0; i < mergedQueue.size(); ++i) {
+            insert.addBindValue(i);
+            insert.addBindValue(mergedQueue.at(i));
+            if (!insert.exec())
+                return abortMerge(insert.lastError().text());
+        }
+    }
+
+    QString queueStamp = localStamp;
+    if (peerStamp > queueStamp)
+        queueStamp = peerStamp;
+    if (queueStamp.isEmpty())
+        queueStamp = now();
+    setSetting("queue_updated_at", queueStamp);
+
+    if (m_fts) {
+        QSqlQuery clear(m_db);
+        if (!clear.exec("DELETE FROM articles_fts"))
+            return abortMerge(clear.lastError().text());
+        QSqlQuery rebuild(m_db);
+        if (!rebuild.exec("INSERT INTO articles_fts(article_id, title, author, excerpt, content_text) "
+                          "SELECT id, title, author, excerpt, content_text FROM articles"))
+            return abortMerge(rebuild.lastError().text());
+    }
+
+    if (!m_db.commit()) {
+        const QString message = m_db.lastError().text();
+        m_db.rollback();
+        detach();
+        return fail(message);
+    }
+    detach();
+
+    if (summary) {
+        summary->insert("added", added);
+        summary->insert("updated", updated);
+        summary->insert("deduped", deduped);
+        summary->insert("queue", mergedQueue.size());
+        summary->insert("queueChanged", queueChanged ? 1 : 0);
+    }
+    emit changed();
+    return true;
 }

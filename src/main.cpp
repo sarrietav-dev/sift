@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QJsonArray>
@@ -48,7 +49,8 @@ Cli parseCli(int argc, char *argv[]) {
     if (args.isEmpty())
         return cli;
 
-    static const QStringList commands{"add", "list", "remove", "move", "export", "play", "open", "help", "gui"};
+    static const QStringList commands{"add", "list", "remove", "move", "export", "sync",
+                                      "play", "open", "help", "gui"};
     static const QMap<QString, QString> aliases{{"a", "add"}, {"ls", "list"}, {"rm", "remove"}, {"mv", "move"}};
     const QString first = args.first();
     if (first == "--help" || first == "-h") {
@@ -106,6 +108,8 @@ QString usage() {
         "  sift remove <id|url|n>            take a page off the queue (rm)\n"
         "  sift move <id|url|n> <n|top|bottom>  reorder the queue (mv)\n"
         "  sift export <id|url>              Markdown to stdout\n"
+        "  sift sync export <file>           write a snapshot for another machine\n"
+        "  sift sync merge <file> [--json]   merge another machine's snapshot\n"
         "  sift play <id|url>                open and start reading\n\n"
         "The Kokoro endpoint is configured in sift's Settings.\n");
 }
@@ -236,6 +240,59 @@ int runExport(const Cli &cli, int argc, char **argv) {
     }
     QTextStream(stdout) << markdown;
     return 0;
+}
+
+int runSync(const Cli &cli, int argc, char **argv) {
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationName("sift");
+    Library library;
+
+    const QString action = cli.positional.value(0);
+    const QString path = cli.positional.value(1);
+
+    if (action == "export") {
+        if (path.isEmpty()) {
+            QTextStream(stderr) << "sift: sync export needs a destination file\n";
+            return 1;
+        }
+        QString error;
+        if (!library.exportSnapshot(path, &error)) {
+            QTextStream(stderr) << "sift: " << error << '\n';
+            return 1;
+        }
+        QTextStream(stdout) << QFileInfo(path).absoluteFilePath() << '\n';
+        return 0;
+    }
+
+    if (action == "merge") {
+        if (path.isEmpty()) {
+            QTextStream(stderr) << "sift: sync merge needs a snapshot file\n";
+            return 1;
+        }
+        QVariantMap summary;
+        QString error;
+        if (!library.mergeSnapshot(path, &summary, &error)) {
+            QTextStream(stderr) << "sift: " << error << '\n';
+            return 1;
+        }
+        notifyRefresh();
+        if (cli.json) {
+            QJsonObject object;
+            for (auto it = summary.constBegin(); it != summary.constEnd(); ++it)
+                object[it.key()] = QJsonValue::fromVariant(it.value());
+            QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Compact) << '\n';
+        } else {
+            QTextStream(stdout) << "merged " << summary.value("added").toInt() << " new, "
+                                << summary.value("updated").toInt() << " updated, "
+                                << summary.value("deduped").toInt() << " duplicate"
+                                << (summary.value("deduped").toInt() == 1 ? "" : "s")
+                                << "; queue has " << summary.value("queue").toInt() << '\n';
+        }
+        return 0;
+    }
+
+    QTextStream(stderr) << "sift: sync needs export or merge\n";
+    return 1;
 }
 
 bool looksLikeUrl(const QString &target) {
@@ -468,6 +525,8 @@ int main(int argc, char *argv[]) {
         return runList(cli, argc, argv);
     if (cli.command == "export")
         return runExport(cli, argc, argv);
+    if (cli.command == "sync")
+        return runSync(cli, argc, argv);
     if (cli.command == "remove" || cli.command == "move")
         return runQueueEdit(cli, argc, argv);
     if (cli.command == "add") {

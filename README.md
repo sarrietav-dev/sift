@@ -109,6 +109,8 @@ sift remove <id|url|n>            # take a page off the queue (rm)
 sift move <id|url|n> <n|top|bottom>   # reorder the queue (mv)
 sift play <id|url>                # open and start reading
 sift export <id|url>              # Markdown to stdout
+sift sync export <file>           # write a snapshot for another machine
+sift sync merge <file>            # merge another machine's snapshot
 ```
 
 `add`, `list`, `remove`, and `move` work on the queue and accept `--json`
@@ -163,6 +165,50 @@ Markdown files get YAML frontmatter with `title`, `source`, `author`,
 `published`, `clipped`, `domain`, `word_count`, and `tags`. If you edit a
 Markdown file outside sift, sift writes the next clip to a new file instead of
 overwriting your work.
+
+## Syncing between machines
+
+sift has no server and no account. To keep one reading list across machines on
+your tailnet, move snapshots and merge them:
+
+```sh
+sift sync export ~/sift-snapshots/$(hostname).db   # consistent copy; the app can stay open
+sift sync merge ~/sift-snapshots/other-machine.db  # merge another machine's copy
+```
+
+Transport is yours: rsync over Tailscale, Taildrop, or Syncthing. A
+hub-and-spoke timer works well when one node stays online:
+
+```sh
+#!/bin/sh
+# every 15 minutes; tailscale ssh must be enabled on the hub
+HUB=cloud   # a MagicDNS name for an always-on node
+sift sync export "$HOME/.cache/sift/sync/$(hostname).db"
+rsync -a "$HOME/.cache/sift/sync/" "HUB:/srv/sift-snapshots/"
+rsync -a "HUB:/srv/sift-snapshots/" "$HOME/.cache/sift/sync/"
+for snapshot in "$HOME/.cache/sift/sync/"*.db; do
+    sift sync merge "$snapshot"
+done
+```
+
+Merging is safe while the app runs, and the app refreshes itself afterwards.
+
+- Articles match by id, then by canonical URL, so clipping the same page on two
+  machines keeps one row. The newer metadata wins.
+- Progress follows the latest play. `read` wins over `unread`.
+- Tags and playlists are unioned.
+- The queue keeps the newer order and appends anything only the other machine
+  had.
+- Settings stay local, so the Kokoro endpoint and save folder do not travel.
+- Deletions do not propagate yet. The other machine's snapshot brings the
+  article back.
+- Both machines need the same schema version. After upgrading one side, upgrade
+  the other before merging; an older snapshot is refused rather than half read.
+
+Article bodies live in `articles/<id>/content.html`. That folder is write-once,
+so sync it with the same tool, and leave `sift.db` alone. Never point a file
+sync tool at the live database: WAL mode writes it continuously and the copies
+will not line up.
 
 ## How it works
 

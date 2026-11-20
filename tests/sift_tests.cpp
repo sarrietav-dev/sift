@@ -35,6 +35,40 @@ QVariantMap articleData(const QString &url, const QString &title, const QString 
     return data;
 }
 
+bool librarySave(Library &library, const QString &url, const QString &title,
+                 const QString &body, QString *id, QString *error) {
+    return library.saveArticle(articleData(url, title, body), id, error);
+}
+
+bool setTimestamps(const QString &connection, const QString &dbPath,
+                   const QString &queueStamp,
+                   const QList<QPair<QString, QString>> &played) {
+    bool ok = false;
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(dbPath);
+        ok = db.open();
+        if (ok) {
+            QSqlQuery setting(db);
+            setting.prepare("INSERT INTO settings(key, value) VALUES ('queue_updated_at', ?) "
+                            "ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+            setting.addBindValue(queueStamp);
+            ok = setting.exec();
+            for (const auto &entry : played) {
+                QSqlQuery update(db);
+                update.prepare("UPDATE articles SET last_played_at = ?, updated_at = ? WHERE id = ?");
+                update.addBindValue(entry.second);
+                update.addBindValue(entry.second);
+                update.addBindValue(entry.first);
+                if (!update.exec())
+                    ok = false;
+            }
+        }
+    }
+    QSqlDatabase::removeDatabase(connection);
+    return ok;
+}
+
 class SiftTests : public QObject {
     Q_OBJECT
 
@@ -300,6 +334,70 @@ private slots:
         QCOMPARE(ids(), QStringList({beta, gamma, alpha}));
         QVERIFY(!library.sortQueue("unsupported"));
         QCOMPARE(ids(), QStringList({beta, gamma, alpha}));
+    }
+
+    void libraryMergesSnapshots() {
+        QTemporaryDir firstDir;
+        QTemporaryDir secondDir;
+        Library first(firstDir.path());
+        Library second(secondDir.path());
+
+        QString firstA, firstB, secondA, secondC, error;
+        QVERIFY(librarySave(first, "https://example.com/a", "Alpha", "First body.", &firstA, &error));
+        QVERIFY(librarySave(first, "https://example.com/b", "Beta", "Second body.", &firstB, &error));
+        QVERIFY(librarySave(second, "https://example.com/a", "Alpha again", "Third body.", &secondA, &error));
+        QVERIFY(librarySave(second, "https://example.com/c", "Gamma", "Fourth body.", &secondC, &error));
+        QVERIFY(firstA != secondA);
+
+        first.setReadState(firstA, 1);
+        first.saveProgress(firstA, 4);
+        first.setTags(firstA, {"research"});
+        QVERIFY(first.addToQueue(firstA));
+        QVERIFY(first.addToQueue(firstB));
+
+        second.saveProgress(secondA, 9);
+        QVERIFY(second.addToQueue(secondC));
+
+        // Fix the clocks so the merge rules are checked, not the test runtime.
+        QVERIFY(setTimestamps("sift_merge_first", firstDir.path() + "/sift.db",
+                              "2025-01-01T00:00:00Z", {{firstA, "2025-01-01T00:00:00Z"}}));
+        QVERIFY(setTimestamps("sift_merge_second", secondDir.path() + "/sift.db",
+                              "2025-02-01T00:00:00Z", {{secondA, "2025-02-01T00:00:00Z"}}));
+
+        const QString snapshot = firstDir.path() + "/snapshot.db";
+        QVERIFY2(first.exportSnapshot(snapshot, &error), qPrintable(error));
+        QVERIFY(QFile::exists(snapshot));
+
+        QVariantMap summary;
+        QVERIFY2(second.mergeSnapshot(snapshot, &summary, &error), qPrintable(error));
+        QCOMPARE(summary.value("added").toInt(), 1);
+        QCOMPARE(summary.value("deduped").toInt(), 1);
+        QCOMPARE(second.articles("all").size(), 3);
+
+        // The same URL keeps one row. The later state wins progress and
+        // metadata, while the union keeps the tag and the reading state.
+        const QVariantMap mergedA = second.article(secondA);
+        QCOMPARE(mergedA.value("title").toString(), QString("Alpha again"));
+        QCOMPARE(mergedA.value("readState").toInt(), 1);
+        QCOMPARE(mergedA.value("lastSentence").toInt(), 9);
+        QCOMPARE(mergedA.value("tags").toStringList(), QStringList({"research"}));
+
+        // The newer queue keeps its order and appends what only the other
+        // machine had.
+        QStringList queueIds;
+        for (const QVariant &item : second.queue())
+            queueIds << item.toMap().value("id").toString();
+        QCOMPARE(queueIds, QStringList({secondC, secondA, firstB}));
+
+        // The search index is rebuilt from the merged rows.
+        QCOMPARE(second.articles("all", {}, "Beta").size(), 1);
+
+        QVariantMap again;
+        QVERIFY2(second.mergeSnapshot(snapshot, &again, &error), qPrintable(error));
+        QCOMPARE(again.value("added").toInt(), 0);
+        QCOMPARE(again.value("updated").toInt(), 0);
+        QCOMPARE(second.articles("all").size(), 3);
+        QCOMPARE(second.queue().size(), 3);
     }
 
     void libraryDeletesArticleAndFiles() {
