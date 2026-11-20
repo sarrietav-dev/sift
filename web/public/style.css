@@ -282,6 +282,65 @@ body.buffering .play .buffer { opacity: 1; animation: spin 800ms linear infinite
     background-size: 5px 5px; background-repeat: no-repeat;
 }
 .sheet-link { display: block; padding: 1rem 0 0.25rem; color: var(--link); text-decoration: none; }
+.sheet-nav { width: 100%; text-align: left; }
+.sheet-row > .sheet-value { display: flex; align-items: center; gap: 0.25rem; min-width: 0; color: var(--tx); font-weight: 600; }
+.sheet-value > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-value svg { width: 18px; height: 18px; color: var(--tx-2); }
+@media (hover: hover) { .sheet-nav:hover .sheet-value svg { color: var(--tx); } }
+.sheet-page { animation: page-in 200ms var(--ease); }
+#sheet-main { --from: -24px; }
+.voice-page { --from: 24px; display: flex; flex-direction: column; height: min(72dvh, 560px); }
+
+/* Voice picker */
+.voice-head { display: flex; align-items: center; gap: 0.25rem; min-height: 52px; margin-left: -0.6rem; }
+.voice-title { font-weight: 700; }
+.voice-search { width: 100%; margin: 0 0 0.25rem; }
+.voice-status {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.5rem 0; color: var(--tx-2); font-size: 0.9rem;
+}
+.voice-status button { color: var(--link); font-weight: 600; }
+.voice-list {
+    flex: 1; overflow-y: auto; overscroll-behavior: contain;
+    margin: 0 -1.25rem; padding: 0 0 0.5rem;
+}
+.voice-group {
+    position: sticky; top: 0; z-index: 1;
+    padding: 0.9rem 1.25rem 0.35rem; background: var(--bg);
+    color: var(--tx-2); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.voice-item { display: flex; align-items: center; padding-right: 0.75rem; }
+.voice-pick {
+    flex: 1; min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.4rem 0.5rem 0.4rem 1.25rem; text-align: left;
+}
+.voice-text { flex: 1; min-width: 0; display: grid; }
+.voice-name { font-weight: 600; }
+.voice-meta { color: var(--tx-2); font-size: 0.8rem; }
+.voice-check { width: 20px; height: 20px; color: var(--accent); visibility: hidden; }
+.voice-pick[aria-current="true"] .voice-check { visibility: visible; }
+.voice-pick[aria-current="true"] .voice-name { color: var(--accent); }
+.voice-pick:active { background: var(--bg-2); }
+@media (hover: hover) { .voice-item:hover { background: var(--bg-2); } }
+.voice-pick:focus-visible { outline-offset: -2px; }
+.voice-preview {
+    position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center;
+    border-radius: 50%; border: 1px solid var(--ui-2); color: var(--tx-2);
+}
+.voice-preview svg { width: 16px; height: 16px; grid-area: 1 / 1; }
+.voice-preview .voice-icon-stop { display: none; }
+.voice-item.playing .voice-preview, .voice-item.loading .voice-preview { color: var(--tx); border-color: var(--tx-3); }
+.voice-item.playing .voice-icon-play, .voice-item.loading .voice-icon-play { display: none; }
+.voice-item.playing .voice-icon-stop, .voice-item.loading .voice-icon-stop { display: block; }
+.voice-ring {
+    position: absolute; inset: -1px; border-radius: 50%;
+    border: 2px solid transparent; border-top-color: var(--accent); opacity: 0;
+}
+.voice-item.loading .voice-ring { opacity: 1; animation: spin 800ms linear infinite; }
+.voice-item.playing .voice-preview { border-color: var(--accent); }
+@media (hover: hover) { .voice-preview:hover { color: var(--tx); border-color: var(--tx-3); } }
+.voice-empty { padding: 1rem 1.25rem; }
+@keyframes page-in { from { opacity: 0; transform: translateX(var(--from, 0)); } }
 @keyframes rise { from { transform: translateY(100%); } }
 
 /* Drawer */
@@ -412,7 +471,8 @@ body.drawer-open { overflow: hidden; }
         padding-bottom: 0.75rem; border: 1px solid var(--ui); border-radius: 12px;
         animation: pop 160ms var(--ease);
     }
-    .sheet-row:last-of-type { border-bottom: 0; }
+    #sheet-main .sheet-row:last-of-type { border-bottom: 0; }
+    .voice-page { height: min(70vh, 520px); }
     body.sheet-open .scrim { display: block; background: transparent; }
     @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
 }

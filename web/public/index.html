@@ -88,32 +88,48 @@
 </footer>
 
 <div id="sheet" class="sheet" role="dialog" aria-label="Playback options" hidden>
-  <div class="sheet-row">
-    <span>Speed</span>
-    <div class="stepper">
-      <button id="slower" type="button" aria-label="Slower"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-      <output id="speed-value">1.00×</output>
-      <button id="faster" type="button" aria-label="Faster"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <div id="sheet-main" class="sheet-page">
+    <div class="sheet-row">
+      <span>Speed</span>
+      <div class="stepper">
+        <button id="slower" type="button" aria-label="Slower"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <output id="speed-value">1.00×</output>
+        <button id="faster" type="button" aria-label="Faster"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
     </div>
-  </div>
-  <label class="sheet-row">
-    <span>Voice</span>
-    <select id="voice"></select>
-  </label>
-  <div class="sheet-row">
-    <span>Text size</span>
-    <div class="stepper">
-      <button id="smaller" type="button" aria-label="Smaller text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-      <output id="size-value">19</output>
-      <button id="larger" type="button" aria-label="Larger text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button id="voice-row" class="sheet-row sheet-nav" type="button" aria-controls="voice-page">
+      <span>Voice</span>
+      <span class="sheet-value"><span id="voice-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
+    </button>
+    <div class="sheet-row">
+      <span>Text size</span>
+      <div class="stepper">
+        <button id="smaller" type="button" aria-label="Smaller text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <output id="size-value">19</output>
+        <button id="larger" type="button" aria-label="Larger text"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
     </div>
+    <a id="source" class="sheet-link" target="_blank" rel="noopener noreferrer" hidden>Open the original page</a>
   </div>
-  <a id="source" class="sheet-link" target="_blank" rel="noopener noreferrer" hidden>Open the original page</a>
+  <div id="voice-page" class="sheet-page voice-page" hidden>
+    <div class="voice-head">
+      <button id="voice-back" class="icon-button" type="button" aria-label="Back to options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <span class="voice-title">Voice</span>
+    </div>
+    <input id="voice-search" class="filter voice-search" type="search" placeholder="Search voices" aria-label="Search voices" autocomplete="off">
+    <div id="voice-status" class="voice-status" hidden>
+      <span>The voice server is not answering.</span>
+      <button id="voice-retry" type="button">Retry</button>
+    </div>
+    <div id="voice-list" class="voice-list" aria-label="Voices"></div>
+  </div>
 </div>
 
 <template id="icon-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg></template>
 <template id="icon-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></template>
 <template id="icon-plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></template>
+<template id="icon-play-small"><svg viewBox="0 0 24 24"><path class="fill" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg></template>
+<template id="icon-stop"><svg viewBox="0 0 24 24"><rect class="fill" x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></template>
 <template id="icon-check"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></template>
 </body>
 </html>

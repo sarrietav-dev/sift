@@ -1,6 +1,7 @@
 import { QueueList, renderLibrary } from "./queue.js";
 import { renderArticle } from "./reader.js";
 import { AudioStore, Dropped, announcement, cleanForSpeech, prefetchIndices } from "./tts.js";
+import { VoicePicker } from "./voices.js";
 
 const $ = id => document.getElementById(id);
 const desktop = matchMedia("(min-width: 960px)");
@@ -363,6 +364,7 @@ function updateTransport() {
 
 async function play(index = state.index) {
     if (!state.article || !state.sentences.length) return;
+    voicePicker.cancel();
     const run = ++generation;
     state.index = Math.max(0, Math.min(index, state.sentences.length - 1));
     if (state.index !== 0) state.introPending = false;
@@ -443,6 +445,7 @@ function pause() {
 }
 
 function resume() {
+    voicePicker.cancel();
     // A paused clip of the current sentence picks up mid-sentence; anything
     // else starts the sentence over.
     const intro = state.introPending;
@@ -512,10 +515,11 @@ if ("mediaSession" in navigator) {
 // ---------------------------------------------------------------- options
 
 function setSheet(open) {
+    if (!open) voicePicker.close();
     $("sheet").hidden = !open;
     document.body.classList.toggle("sheet-open", open);
     $("options-button").setAttribute("aria-expanded", String(open));
-    if (open) loadVoices();
+    if (open) voicePicker.load();
 }
 
 function formatSpeed(speed) {
@@ -551,42 +555,30 @@ function restartForNewVoice() {
 $("slower").addEventListener("click", () => changeSpeed(-1));
 $("faster").addEventListener("click", () => changeSpeed(1));
 
-const ACCENTS = { a: "US", b: "UK", e: "Spanish", f: "French", h: "Hindi", i: "Italian", j: "Japanese", p: "Portuguese", z: "Chinese" };
-function voiceLabel(id) {
-    const [prefix, name] = id.split("_");
-    const accent = ACCENTS[prefix[0]] || prefix[0].toUpperCase();
-    const gender = prefix[1] === "f" ? " ♀" : prefix[1] === "m" ? " ♂" : "";
-    const title = name.split("_").map(part => part[0].toUpperCase() + part.slice(1)).join(" ");
-    return `${title} · ${accent}${gender}`;
-}
-
-let voicesLoaded = false;
-function renderVoices(voices) {
-    const select = $("voice");
-    const list = voices.includes(state.voice) ? voices : [state.voice, ...voices];
-    select.replaceChildren(...list.map(id => {
-        const option = document.createElement("option");
-        option.value = id;
-        option.textContent = voiceLabel(id);
-        return option;
-    }));
-    select.value = state.voice;
-}
-
-async function loadVoices() {
-    if (voicesLoaded) return;
-    try {
-        renderVoices((await api("/api/voices")).voices);
-        voicesLoaded = true;
-    } catch {
-        renderVoices([]);
-    }
-}
-
-$("voice").addEventListener("change", event => {
-    state.voice = event.target.value;
-    saveSettings();
-    restartForNewVoice();
+const voicePicker = new VoicePicker({
+    sheet: $("sheet"),
+    audio,
+    store,
+    api,
+    local,
+    toast,
+    current: () => state.voice,
+    speed: () => state.speed,
+    language: () => state.article?.language || "en",
+    sentence: () => (state.introPending && state.index === 0 ? state.intro : state.speech[state.index]) || "",
+    // A preview pauses the article and reports whether it was playing.
+    onPreviewStart: () => {
+        const wasPlaying = state.playing;
+        if (wasPlaying) pause();
+        return wasPlaying;
+    },
+    onPreviewEnd: () => resume(),
+    onSelect: (id, resumePlayback) => {
+        state.voice = id;
+        saveSettings();
+        if (resumePlayback) resume();
+        else restartForNewVoice();
+    },
 });
 
 function setTextSize(size) {
@@ -629,8 +621,15 @@ desktop.addEventListener("change", () => setDrawer(desktop.matches ? local.get("
 document.addEventListener("keydown", event => {
     if (event.target.closest("input, select, textarea") || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "Escape") {
-        setSheet(false);
+        if (voicePicker.open) voicePicker.back();
+        else setSheet(false);
         if (!desktop.matches) setDrawer(false);
+        return;
+    }
+    if (event.key === "v" || event.key === "V") {
+        event.preventDefault();
+        setSheet(true);
+        voicePicker.show({ keyboard: true });
         return;
     }
     if (event.target.closest(".row-main") && (event.key === " " || event.key === "Enter")) return;
@@ -666,7 +665,7 @@ async function start() {
     state.voice = initial.settings.voice || "af_heart";
     state.speed = initial.settings.speed || 1;
     renderSpeed();
-    renderVoices([]);
+    voicePicker.renderValue();
     renderDrawer();
 
     // A link shared to the installed app arrives as ?url= or inside ?text=.

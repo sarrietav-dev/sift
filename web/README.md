@@ -8,6 +8,13 @@ proxies speech to a private Kokoro-FastAPI container.
 - The player has previous, play/pause, and next sentence. The button on the
   left opens the queue; the speed button on the right opens speed, voice, and
   text size.
+- The voice row in that sheet opens a picker grouped by language, with the
+  article's language first and your last three voices on top. Search matches
+  name, language, or gender. Each voice has a preview button that reads the
+  sentence you are on; a preview pauses the article and hands playback back
+  when it ends. Picking a voice restarts the current sentence in it. `V`
+  opens the picker from the keyboard; arrows move, `Space` previews, `Enter`
+  picks.
 - The queue drawer adds pages from a pasted link, reorders by dragging the
   grip, and removes a row when you swipe it left (or hover and click ✕ with a
   mouse). Queue and library sections collapse. On a wide screen the drawer is

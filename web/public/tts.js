@@ -90,6 +90,13 @@ export class AudioStore {
         return entries;
     }
 
+    // A voice preview jumps the queue: the listener is waiting on it.
+    preview(text, voice, speed) {
+        const entry = this.entry(text, voice, speed);
+        if (entry.status === "queued") this.load(entry);
+        return entry;
+    }
+
     pump() {
         for (const key of this.wanted) {
             if (this.active >= this.concurrency) break;

@@ -6,6 +6,7 @@ import { createApp } from "../server.js";
 import { isPrivateAddress } from "../src/extract.js";
 import { plainText, sanitize, textToHtml } from "../src/sanitize.js";
 import { announcement, cleanForSpeech, prefetchIndices } from "../public/tts.js";
+import { describeVoice, previewText } from "../public/voices.js";
 
 const HOST = "sift.example";
 const PAGE = `<!doctype html><html><head><title>A page</title><link rel="canonical" href="/canonical"></head>
@@ -83,6 +84,23 @@ describe("speech helpers", () => {
         expect(cleanForSpeech("A claim [12] here.\n Next")).toBe("A claim here. Next");
         expect(announcement("Title", "Ann")).toBe("Title. By Ann.");
         expect(announcement("Title", "")).toBe("Title.");
+    });
+});
+
+describe("voice picker helpers", () => {
+    test("voice ids read as name, accent, and gender", () => {
+        expect(describeVoice("bf_emma")).toMatchObject({ name: "Emma", label: "Emma · UK ♀", meta: "English (UK) · female" });
+        expect(describeVoice("am_v0michael").name).toBe("Michael (v0)");
+        expect(describeVoice("af_amelia_inno").name).toBe("Amelia Inno");
+        expect(describeVoice("zm_yunjian").search).toContain("mandarin");
+    });
+
+    test("previews read a short sentence, or a sample without one", () => {
+        expect(previewText("")).toBe("Hello. This is how I sound reading to you.");
+        expect(previewText("Short one.")).toBe("Short one.");
+        const long = previewText("word ".repeat(100));
+        expect(long.length).toBeLessThanOrEqual(241);
+        expect(long.endsWith("…")).toBe(true);
     });
 });
 
