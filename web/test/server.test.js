@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../server.js";
-import { isPrivateAddress } from "../src/extract.js";
+import { fetchPage, isPrivateAddress } from "../src/extract.js";
 import { splitMp3 } from "../src/mp3.js";
 import { plainText, sanitize, textToHtml } from "../src/sanitize.js";
 import { Speech, spokenNumerals } from "../src/speech.js";
@@ -82,6 +82,13 @@ describe("sanitize", () => {
 
     test("text fallback escapes and splits paragraphs", () => {
         expect(textToHtml("a <b>\n\nsecond")).toBe("<p>a &lt;b&gt;</p>\n<p>second</p>");
+    });
+
+    test("synced text without line breaks is split into paragraphs again", () => {
+        // Text synced from the desktop has its whitespace collapsed, and where
+        // two blocks met the sentences run together.
+        const html = textToHtml("Owners hire no one.With AI tools they scale. The U.S. grew 3.5% in Q3. Four. Five. Six.");
+        expect(html).toBe("<p>Owners hire no one. With AI tools they scale. The U.S. grew 3.5% in Q3. Four.</p>\n<p>Five. Six.</p>");
     });
 });
 
@@ -196,6 +203,60 @@ describe("speech queue", () => {
     });
 });
 
+describe("fetching pages", () => {
+    test("a page that refuses the first client name is asked again as a browser", async () => {
+        const agents = [];
+        const page = await fetchPage("https://93.184.216.34/post", async (url, options) => {
+            agents.push(options.headers["user-agent"]);
+            return agents.length === 1
+                ? new Response("no", { status: 403 })
+                : new Response(PAGE, { headers: { "content-type": "text/html" } });
+        });
+        expect(page.html).toContain("A page");
+        expect(agents[0]).toStartWith("sift/");
+        expect(agents[1]).toContain("Chrome/");
+    });
+});
+
+describe("speech background work", () => {
+    test("background clips wait behind a stream and leave Kokoro free after a jump", async () => {
+        const order = [];
+        const release = [];
+        const fetcher = (url, options) => {
+            order.push(JSON.parse(options.body).input);
+            return new Promise((resolve, reject) => {
+                options.signal.addEventListener("abort", () => reject(new Error("aborted")));
+                release.push(() => resolve(new Response(new Uint8Array([1]))));
+            });
+        };
+        const speech = new Speech({ endpoint: "http://kokoro", cacheDirectory: join(directory, "queue-c"), fetcher });
+        const stream = new AbortController();
+        const playing = speech.audio("Playing.", "af_heart", 1, { signal: stream.signal });
+        const opening = speech.audio("Next article.", "af_heart", 1, { background: true });
+        const ahead = speech.audio("Ahead.", "af_heart", 1, { signal: stream.signal });
+        await Bun.sleep(5);
+        release.shift()();
+        await playing;
+        await Bun.sleep(5);
+        // The stream's next clip goes before the next article's opening.
+        expect(order).toEqual(["Playing.", "Ahead."]);
+        // A jump drops the stream; the opening does not start at once, so
+        // the clip the listener asks for next goes first.
+        const settled = ahead.catch(() => {});
+        stream.abort();
+        await settled;
+        const jumped = speech.audio("Jumped to.", "af_heart", 1, { urgent: true });
+        await Bun.sleep(5);
+        expect(order).toEqual(["Playing.", "Ahead.", "Jumped to."]);
+        release.at(-1)();
+        await jumped;
+        await Bun.sleep(600);
+        expect(order.at(-1)).toBe("Next article.");
+        release.at(-1)();
+        await opening;
+    });
+});
+
 describe("voice picker helpers", () => {
     test("voice ids read as name, accent, and gender", () => {
         expect(describeVoice("bf_emma")).toMatchObject({ name: "Emma", label: "Emma · UK ♀", meta: "English (UK) · female" });
@@ -249,6 +310,34 @@ describe("api", () => {
         expect(article.html).toContain("First sentence.");
         expect(article.html).not.toContain("onerror");
         expect(article.html).not.toContain("<script");
+    });
+
+    test("a page that refused to load again is not asked on every open", async () => {
+        let pageFetches = 0;
+        const refusing = async (url, options) => {
+            if (String(url).includes("/v1/audio/")) return fetcher(url, options);
+            pageFetches++;
+            return pageFetches === 1
+                ? new Response(PAGE, { headers: { "content-type": "text/html" } })
+                : new Response("no", { status: 403 });
+        };
+        const local = mkdtempSync(join(tmpdir(), "sift-web-"));
+        const other = createApp({ dataDirectory: local, kokoroUrl: "http://kokoro", hosts: [HOST], fetcher: refusing });
+        try {
+            const request = (method, path, body) => other.handle(new Request("http://" + HOST + path, {
+                method, headers: { host: HOST, origin: "http://" + HOST, "content-type": "application/json" },
+                body: body ? JSON.stringify(body) : undefined,
+            }));
+            const { id: added } = await (await request("POST", "/api/articles", { url: "https://93.184.216.34/refuses" })).json();
+            unlinkSync(other.library.htmlPath(added));
+            for (let i = 0; i < 3; i++) expect((await (await request("GET", "/api/articles/" + added)).json()).source).toBe("text");
+            // One fetch to add it, one refused refresh (asked as sift, then as
+            // a browser), then none.
+            expect(pageFetches).toBe(3);
+        } finally {
+            other.library.close();
+            rmSync(local, { recursive: true, force: true });
+        }
     });
 
     test("re-adding the same page keeps one article", async () => {

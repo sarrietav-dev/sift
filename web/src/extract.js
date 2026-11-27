@@ -7,7 +7,14 @@ import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 import { plainText, sanitize } from "./sanitize.js";
 
-const USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+// Sites behind Cloudflare and similar walls refuse a browser user agent that
+// does not come with a browser's TLS handshake, but let an honest client name
+// through. Others refuse anything that is not a browser. Try the honest name
+// first and the browser one after a refusal.
+const USER_AGENTS = [
+    "sift/0.2 (+https://github.com/sarrietav-dev/sift)",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+];
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 
@@ -74,14 +81,17 @@ export async function fetchPage(address, fetcher = fetch) {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
         await assertPublic(url);
         let response;
-        try {
-            response = await fetcher(url.href, {
-                redirect: "manual",
-                signal: AbortSignal.timeout(20000),
-                headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5", "accept-language": "en,*;q=0.5" },
-            });
-        } catch {
-            throw new ExtractError(`Could not load ${url.hostname}.`);
+        for (const agent of USER_AGENTS) {
+            try {
+                response = await fetcher(url.href, {
+                    redirect: "manual",
+                    signal: AbortSignal.timeout(20000),
+                    headers: { "user-agent": agent, accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5", "accept-language": "en,*;q=0.5" },
+                });
+            } catch {
+                throw new ExtractError(`Could not load ${url.hostname}.`);
+            }
+            if (response.status !== 403 && response.status !== 429) break;
         }
         if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
             url = new URL(response.headers.get("location"), url);

@@ -64,6 +64,8 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
     const files = staticFiles();
     const allowedHosts = new Set(hosts);
     const refreshing = new Map();
+    const refreshFailed = new Map();
+    const REFRESH_RETRY = 6 * 60 * 60 * 1000;
 
     // A reading is the list of sentences of one article in one voice, kept in
     // memory so the phone can play it as a single continuous stream instead of
@@ -82,12 +84,30 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
         while (readings.size > READING_LIMIT) readings.delete(readings.keys().next().value);
     }
 
-    // The first clips of a reading, made before play is pressed. They queue
-    // behind anything a listener is waiting on.
+    // The first clips of a reading, made before play is pressed: for the
+    // article on screen, or for the next ones in the queue. They wait behind
+    // anything a stream is playing.
     function warmReading(reading, from = 0) {
         for (const text of reading.texts.slice(from, from + 2)) {
-            if (cleanForSpeech(text)) speech.audio(text, reading.voice, reading.speed).catch(() => {});
+            if (cleanForSpeech(text)) speech.audio(text, reading.voice, reading.speed, { background: true }).catch(() => {});
         }
+    }
+
+    // A stream stays about LEAD seconds ahead of what the listener hears. The
+    // browser reads a stream as fast as it arrives, so without a limit Kokoro
+    // would make the whole article at once and stay busy: a jump to another
+    // article would wait behind a clip nobody needs yet, and the next queue
+    // items would never get their opening ready. The player reports its
+    // position with each timing poll; between reports, and with the screen
+    // off when polls slow down, the position is assumed to keep moving, so
+    // the stream never starves.
+    const LEAD = 15;
+    const COMFORT = 8;
+
+    function heardSeconds(reading, from, started) {
+        const live = reading.live;
+        const since = live && live.from === from ? live : { time: 0, at: started };
+        return since.time + (Date.now() - since.at) / 1000;
     }
 
     // Two clips are kept ahead so one slow sentence does not drain the
@@ -96,16 +116,22 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
     // drops (a jump, a new voice) gives up the clips it asked for.
     function audioStream(reading, from) {
         let next = from;
+        let made = 0; // seconds of audio this stream has produced
+        const started = Date.now();
         const stop = new AbortController();
         const ahead = [];
         const make = (index, urgent) => {
             if (stop.signal.aborted || !cleanForSpeech(reading.texts[index])) return { audio: new Uint8Array(0), duration: 0 };
-            return speech.audio(reading.texts[index], reading.voice, reading.speed, { urgent, signal: stop.signal })
+            // Comfortably ahead, the next clip can wait behind the opening of
+            // the next article in the queue.
+            const background = !urgent && made - heardSeconds(reading, from, started) > COMFORT;
+            return speech.audio(reading.texts[index], reading.voice, reading.speed, { urgent, background, signal: stop.signal })
                 .then(file => Bun.file(file).arrayBuffer())
                 .then(bytes => splitMp3(new Uint8Array(bytes)));
         };
         const fill = () => {
-            while (ahead.length < 2 && next < reading.texts.length) {
+            while (ahead.length < 2 && next < reading.texts.length
+                && (next === from || made - heardSeconds(reading, from, started) < LEAD)) {
                 const index = next++;
                 ahead.push({ index, clip: make(index, index === from) });
             }
@@ -113,11 +139,27 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
         fill();
         return new ReadableStream({
             async pull(controller) {
+                // Far enough ahead: wait for the listener to catch up.
+                while (!ahead.length && next < reading.texts.length && !stop.signal.aborted) {
+                    await Bun.sleep(250);
+                    fill();
+                }
                 while (ahead.length) {
                     const { index, clip } = ahead.shift();
+                    // A clip asked for in the background stops waiting its
+                    // turn once the listener gets close to it.
+                    let promoted = false;
+                    const promote = () => {
+                        if (promoted || made - heardSeconds(reading, from, started) >= COMFORT || !cleanForSpeech(reading.texts[index])) return;
+                        promoted = true;
+                        speech.audio(reading.texts[index], reading.voice, reading.speed, { signal: stop.signal }).catch(() => {});
+                    };
+                    promote();
+                    const watch = setInterval(promote, 500);
                     try {
                         const { audio, duration } = await clip;
                         reading.durations[index] = duration;
+                        made += duration || 0;
                         fill();
                         if (audio.length) {
                             controller.enqueue(audio);
@@ -126,6 +168,8 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
                     } catch (error) {
                         if (!stop.signal.aborted) controller.error(error);
                         return;
+                    } finally {
+                        clearInterval(watch);
                     }
                 }
                 controller.close();
@@ -140,11 +184,19 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
     // Articles synced from another machine carry text but no HTML snapshot.
     // Fetching the page again restores images and formatting; one refresh per
     // article runs at a time, shared by the warm-up loop and open requests.
+    // A page that refused once is left alone for a while, so opening its
+    // article shows the saved text at once instead of asking again each time.
     function refresh(id) {
         if (refreshing.has(id)) return refreshing.get(id);
+        const failed = refreshFailed.get(id);
+        if (failed && Date.now() - failed < REFRESH_RETRY) return Promise.reject(new Error("refused recently"));
         const row = library.article(id);
         const job = extract(row.url, fetcher)
             .then(page => library.writeHtml(id, page.html))
+            .catch(error => {
+                refreshFailed.set(id, Date.now());
+                throw error;
+            })
             .finally(() => refreshing.delete(id));
         refreshing.set(id, job);
         return job;
@@ -251,6 +303,13 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
         if ((match = path.match(/^\/api\/readings\/([\w-]+)\/timing$/)) && method === "GET") {
             const reading = readings.get(match[1]);
             if (!reading) return failure("No such reading", 404);
+            // The player says where it is: `at` names the stream it plays (its
+            // starting item) and `t` the seconds heard in it.
+            if (url.searchParams.has("at") && url.searchParams.has("t")) {
+                const at = Number(url.searchParams.get("at"));
+                const time = Number(url.searchParams.get("t"));
+                if (Number.isInteger(at) && Number.isFinite(time) && time >= 0) reading.live = { from: at, time, at: Date.now() };
+            }
             return json({ durations: reading.durations });
         }
 

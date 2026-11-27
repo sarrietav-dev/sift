@@ -4,12 +4,16 @@
 //
 // Kokoro runs concurrent requests together and every one of them slows down
 // (six at once made the first wait four times as long), so clips are made one
-// at a time. Urgent ones, the clip a listener is waiting on, go first, and a
-// clip nobody is waiting for any more is dropped or its request aborted.
+// at a time: urgent ones first (the clip a listener is waiting on), then a
+// playing stream's next clips, then background work such as the opening of
+// the next article. A clip nobody is waiting for any more is dropped or its
+// request aborted.
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export class SpeechError extends Error {}
+
+const BACKGROUND_QUIET = 500;
 
 // Words after which a Roman numeral is a number, not letters. Same rules as
 // src/speech.cpp in the desktop app; change both together.
@@ -96,6 +100,11 @@ export class Speech {
         this.inflight = new Map();
         this.waiting = [];
         this.busy = false;
+        this.quietTimer = null;
+        // When a stream's clip finished or was dropped. A jump cancels one
+        // clip and asks for the next a moment later; background work starting
+        // in that moment would make the listener wait behind it.
+        this.lastForeground = 0;
         this.voiceList = null;
         this.writes = 0;
         mkdirSync(cacheDirectory, { recursive: true });
@@ -117,10 +126,10 @@ export class Speech {
         return join(this.cacheDirectory, hash.slice(0, 2), hash + ".mp3");
     }
 
-    // `urgent` puts the clip ahead of prefetches. Aborting `signal` gives up
-    // on the clip; it is dropped, or its request aborted, once no caller is
-    // waiting for it.
-    async audio(input, voice, speed, { urgent = false, signal } = {}) {
+    // `urgent` puts the clip ahead of everything, `background` behind
+    // everything. Aborting `signal` gives up on the clip; it is dropped, or
+    // its request aborted, once no caller is waiting for it.
+    async audio(input, voice, speed, { urgent = false, background = false, signal } = {}) {
         const text = cleanForSpeech(input);
         if (!text || text.length > 4000) throw new SpeechError("Invalid speech request");
         if (!/^[a-z]{2}_[a-z0-9_]+$/.test(voice) || !(speed >= 0.5 && speed <= 2)) throw new SpeechError("Invalid speech request");
@@ -133,14 +142,14 @@ export class Speech {
         if (signal?.aborted) throw new SpeechError("Cancelled");
         let job = this.inflight.get(path);
         if (!job) {
-            job = { path, text, voice, speed, urgent: false, started: false, waiters: 0, controller: new AbortController() };
+            job = { path, text, voice, speed, rank: 2, started: false, waiters: 0, controller: new AbortController() };
             job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
             job.promise.catch(() => {});
             this.inflight.set(path, job);
             this.waiting.push(job);
         }
         job.waiters++;
-        if (urgent) job.urgent = true;
+        job.rank = Math.min(job.rank, urgent ? 0 : background ? 2 : 1);
         signal?.addEventListener("abort", () => {
             if (--job.waiters <= 0) this.cancel(job);
         }, { once: true });
@@ -154,12 +163,20 @@ export class Speech {
         const at = this.waiting.indexOf(job);
         if (at >= 0) this.waiting.splice(at, 1);
         if (job.started) job.controller.abort();
+        if (job.rank < 2) this.lastForeground = performance.now();
         job.reject(new SpeechError("Cancelled"));
     }
 
     next() {
         if (this.busy || !this.waiting.length) return;
-        const at = Math.max(0, this.waiting.findIndex(job => job.urgent));
+        let at = 0;
+        for (let i = 1; i < this.waiting.length; i++) if (this.waiting[i].rank < this.waiting[at].rank) at = i;
+        const quiet = BACKGROUND_QUIET - (performance.now() - this.lastForeground);
+        if (this.waiting[at].rank === 2 && quiet > 0) {
+            clearTimeout(this.quietTimer);
+            this.quietTimer = setTimeout(() => this.next(), quiet);
+            return;
+        }
         const [job] = this.waiting.splice(at, 1);
         job.started = true;
         this.busy = true;
@@ -167,6 +184,7 @@ export class Speech {
             .then(job.resolve, job.reject)
             .finally(() => {
                 if (this.inflight.get(job.path) === job) this.inflight.delete(job.path);
+                if (job.rank < 2) this.lastForeground = performance.now();
                 this.busy = false;
                 this.next();
             });

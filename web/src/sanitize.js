@@ -139,11 +139,28 @@ const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&
 // Articles synced from another machine arrive without their HTML snapshot.
 // Until the page is fetched again, their stored text still reads as
 // paragraphs instead of one wall of text.
+// Saved text from a desktop sync has no line breaks, and where two blocks met
+// their sentences run together ("others.With"). Lines become paragraphs when
+// there are any; otherwise the glued sentences are split again and grouped,
+// a few to a paragraph, so the page reads like an article and not one block.
 export function textToHtml(text) {
-    return (text || "")
-        .split(/\n\s*\n|\n/)
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(line => `<p>${line.replace(/[&<>"']/g, c => ESCAPES[c])}</p>`)
-        .join("\n");
+    const escape = line => line.replace(/[&<>"']/g, c => ESCAPES[c]);
+    const lines = (text || "").split(/\n\s*\n|\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length > 1) return lines.map(line => `<p>${escape(line)}</p>`).join("\n");
+    const unglued = (lines[0] || "").replace(/([a-z0-9)\]”’"'])([.!?])([A-Z“‘"][a-z])/g, "$1$2 $3");
+    const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+    const paragraphs = [];
+    let current = "";
+    let count = 0;
+    for (const { segment } of segmenter.segment(unglued)) {
+        current += segment;
+        count++;
+        if (count >= 4 || (count >= 2 && current.length > 450)) {
+            paragraphs.push(current.trim());
+            current = "";
+            count = 0;
+        }
+    }
+    if (current.trim()) paragraphs.push(current.trim());
+    return paragraphs.map(paragraph => `<p>${escape(paragraph)}</p>`).join("\n");
 }

@@ -31,6 +31,11 @@ proxies speech to a private Kokoro-FastAPI container.
   on first. Several at once slow every one of them down. A jump or a new voice
   aborts the clips the old stream asked for. Roman numerals after a label are
   read as numbers, as on the desktop.
+- A stream stays about 15 seconds ahead of what you hear (the player reports
+  its position with each timing poll), so Kokoro has time left over. The
+  player uses it to fetch the queue's articles and to have the next two
+  articles' opening sentences made, so moving to the next item shows its text
+  at once and starts speaking in about half a second.
 - Colors are Flexoki, light or dark from the system setting. Text is Atkinson
   Hyperlegible Next, served with the page.
 - The page is installable. On Android, sharing a link to it adds the page to
@@ -49,7 +54,11 @@ scp /tmp/sift.db server:apps/sift/data/sift.db
 
 Articles that arrive without an HTML snapshot are fetched again in the
 background after startup, queue first, so they show their images and
-formatting. Until a page can be fetched, sift shows its saved text. Changes
+formatting. Until a page can be fetched, sift shows its saved text, split back
+into paragraphs. A page that refuses is asked again after six hours, not on
+every open. Some sites (CNBC) refuse every request from a datacenter address;
+copy the desktop's `articles/<id>/content.html` for those, as the sync section
+of the main README describes. Changes
 made on the web stay in the server's database; `sift sync merge` on the
 desktop can read a copy of it.
 

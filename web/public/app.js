@@ -237,7 +237,7 @@ async function open(id, { autoplay = false } = {}) {
     }
     let article;
     try {
-        article = await api(`/api/articles/${id}`);
+        article = await takeArticle(id);
     } catch (error) {
         if (token === openToken) {
             $("article").classList.remove("loading");
@@ -257,11 +257,13 @@ async function open(id, { autoplay = false } = {}) {
     $("source").hidden = !/^https?:/i.test(article.url || "");
 
     const sentences = renderArticle($("content"), article);
+    const spoken = speechOf(article, sentences);
     state.sentences = sentences.map(sentence => sentence.element);
-    state.speech = sentences.map(sentence => cleanForSpeech(sentence.text));
-    state.index = article.readState === 2 ? 0 : Math.min(Math.max(0, article.lastSentence || 0), Math.max(0, sentences.length - 1));
-    state.intro = cleanForSpeech(announcement(article.title, article.author));
+    state.speech = spoken.speech;
+    state.index = spoken.index;
+    state.intro = spoken.intro;
     state.introPending = state.index === 0 && !!state.intro;
+    reading = adoptPrepared(article.id);
     state.following = true;
     currentElement = null;
     $("resume").hidden = true;
@@ -283,6 +285,76 @@ async function open(id, { autoplay = false } = {}) {
     }
     if (autoplay) play(state.index);
     else warm();
+    setTimeout(() => token === openToken && prepareQueue(), 1500);
+}
+
+// ---------------------------------------------------------------- upcoming
+
+// Opening an article should not wait on the network or on Kokoro. Queue
+// articles are fetched ahead, and the next two get a reading whose opening
+// clips the server makes in the background while this one plays.
+const prefetched = new Map();
+const prepared = new Map();
+const PREPARE_AHEAD = 2;
+const PREPARED_FOR = 90 * 60 * 1000; // the server forgets a reading after two hours
+
+// The sentences of an article as the player speaks them, and where it starts.
+function speechOf(article, sentences) {
+    const speech = sentences.map(sentence => cleanForSpeech(sentence.text));
+    const index = article.readState === 2 ? 0 : Math.min(Math.max(0, article.lastSentence || 0), Math.max(0, sentences.length - 1));
+    return { speech, index, intro: cleanForSpeech(announcement(article.title, article.author)) };
+}
+
+// A prefetched copy is used once: progress changes after the article opens,
+// so the next open asks the server again.
+function takeArticle(id) {
+    const entry = prefetched.get(id);
+    prefetched.delete(id);
+    if (entry && Date.now() - entry.at < 10 * 60 * 1000) return entry.promise.catch(() => api(`/api/articles/${id}`));
+    return api(`/api/articles/${id}`);
+}
+
+function adoptPrepared(id) {
+    const entry = prepared.get(id);
+    prepared.delete(id);
+    if (!entry || entry.voice !== state.voice || entry.speed !== state.speed || Date.now() - entry.at > PREPARED_FOR) return null;
+    return entry.reading;
+}
+
+function prepareQueue() {
+    const current = state.article?.id;
+    const position = state.queue.findIndex(item => item.id === current);
+    const upcoming = state.queue.slice(position + 1).concat(position > 0 ? state.queue.slice(0, position) : []);
+    for (const item of upcoming.slice(0, 12)) {
+        if (prefetched.has(item.id)) continue;
+        const entry = { at: Date.now(), promise: api(`/api/articles/${item.id}`) };
+        entry.promise.catch(() => prefetched.delete(item.id));
+        prefetched.set(item.id, entry);
+    }
+    for (const item of upcoming.slice(0, PREPARE_AHEAD)) prepare(item.id);
+}
+
+async function prepare(id) {
+    const voice = state.voice;
+    const speed = state.speed;
+    const known = prepared.get(id);
+    if (known && known.voice === voice && known.speed === speed && Date.now() - known.at < PREPARED_FOR) return;
+    const entry = { voice, speed, at: Date.now(), reading: null };
+    prepared.set(id, entry);
+    try {
+        const article = await prefetched.get(id)?.promise;
+        if (!article || prepared.get(id) !== entry) return;
+        // Split it exactly as open() will, off screen, so the texts match.
+        const sentences = renderArticle(document.createElement("div"), article);
+        if (!sentences.length) return;
+        const { speech, index, intro } = speechOf(article, sentences);
+        const texts = intro ? [intro, ...speech] : speech;
+        const start = index === 0 ? 0 : index + (intro ? 1 : 0);
+        const { id: readingId } = await api("/api/readings", { method: "POST", body: { voice, speed, texts, warm: start } });
+        if (prepared.get(id) === entry) entry.reading = { id: readingId, article: id, voice, speed, intro: !!intro, durations: [] };
+    } catch {
+        if (prepared.get(id) === entry) prepared.delete(id);
+    }
 }
 
 function highlight(scroll = true) {
@@ -413,7 +485,7 @@ function pollTiming(run) {
     const tick = async () => {
         if (run !== generation || !state.playing || reading !== current) return;
         try {
-            const { durations } = await api(`/api/readings/${current.id}/timing`);
+            const { durations } = await api(`/api/readings/${current.id}/timing?at=${streamBase}&t=${audio.currentTime.toFixed(2)}`);
             if (run === generation && reading === current && Array.isArray(durations)) {
                 current.durations = durations;
                 syncIndex();
