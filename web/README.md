@@ -27,6 +27,10 @@ proxies speech to a private Kokoro-FastAPI container.
   the screen off or another app in front. The server synthesizes ahead and
   joins the clips, and caches every one on disk by voice, speed, and text.
   Opening an article synthesizes its first clip before you press play.
+- The server sends Kokoro one clip at a time, the one a listener is waiting
+  on first. Several at once slow every one of them down. A jump or a new voice
+  aborts the clips the old stream asked for. Roman numerals after a label are
+  read as numbers, as on the desktop.
 - Colors are Flexoki, light or dark from the system setting. Text is Atkinson
   Hyperlegible Next, served with the page.
 - The page is installable. On Android, sharing a link to it adds the page to

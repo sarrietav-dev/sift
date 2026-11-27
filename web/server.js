@@ -82,28 +82,32 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
         while (readings.size > READING_LIMIT) readings.delete(readings.keys().next().value);
     }
 
+    // The first clips of a reading, made before play is pressed. They queue
+    // behind anything a listener is waiting on.
     function warmReading(reading, from = 0) {
         for (const text of reading.texts.slice(from, from + 2)) {
             if (cleanForSpeech(text)) speech.audio(text, reading.voice, reading.speed).catch(() => {});
         }
     }
 
-    // Two clips are synthesized ahead so one slow sentence does not drain the
-    // browser's buffer; they leave in order, so the stream stays sequential.
+    // Two clips are kept ahead so one slow sentence does not drain the
+    // browser's buffer. Speech makes them one at a time, the first one the
+    // listener is waiting on before anything else, and a stream the browser
+    // drops (a jump, a new voice) gives up the clips it asked for.
     function audioStream(reading, from) {
         let next = from;
-        let stopped = false;
+        const stop = new AbortController();
         const ahead = [];
-        const make = index => {
-            if (stopped || !cleanForSpeech(reading.texts[index])) return { audio: new Uint8Array(0), duration: 0 };
-            return speech.audio(reading.texts[index], reading.voice, reading.speed)
+        const make = (index, urgent) => {
+            if (stop.signal.aborted || !cleanForSpeech(reading.texts[index])) return { audio: new Uint8Array(0), duration: 0 };
+            return speech.audio(reading.texts[index], reading.voice, reading.speed, { urgent, signal: stop.signal })
                 .then(file => Bun.file(file).arrayBuffer())
                 .then(bytes => splitMp3(new Uint8Array(bytes)));
         };
         const fill = () => {
             while (ahead.length < 2 && next < reading.texts.length) {
                 const index = next++;
-                ahead.push({ index, clip: make(index) });
+                ahead.push({ index, clip: make(index, index === from) });
             }
         };
         fill();
@@ -120,14 +124,15 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
                             return;
                         }
                     } catch (error) {
-                        controller.error(error);
+                        if (!stop.signal.aborted) controller.error(error);
                         return;
                     }
                 }
                 controller.close();
             },
             cancel() {
-                stopped = true;
+                for (const { clip } of ahead) clip.catch?.(() => {});
+                stop.abort();
             },
         });
     }
@@ -202,7 +207,7 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
         if (path === "/api/speech" && method === "GET") {
             const speed = Number(url.searchParams.get("speed"));
             try {
-                const file = await speech.audio(url.searchParams.get("text"), url.searchParams.get("voice") || "", speed);
+                const file = await speech.audio(url.searchParams.get("text"), url.searchParams.get("voice") || "", speed, { urgent: true, signal: request.signal });
                 return new Response(Bun.file(file), { headers: headers("audio/mpeg", { "cache-control": "private, max-age=31536000, immutable" }) });
             } catch (error) {
                 return failure(error.message, error instanceof SpeechError && error.message.startsWith("Invalid") ? 400 : 502);

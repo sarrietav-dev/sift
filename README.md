@@ -22,9 +22,11 @@ for [Omarchy](https://omarchy.org).
 - **Reads the page, not the chrome.** Qt WebEngine loads the URL, then
   [Defuddle](https://github.com/kepano/defuddle) — the same extractor behind
   Obsidian Web Clipper — pulls out the article, title, author, and metadata.
-- **Local voices.** Kokoro-FastAPI speaks each sentence. sift highlights the
-  sentence it is reading, preloads the next paragraph, and caches audio per
-  voice, speed, and text.
+- **Local voices.** Kokoro-FastAPI speaks each sentence, streamed into one
+  audio output so sentences follow each other without a gap. sift highlights
+  the sentence it is reading, prepares the next paragraph one sentence at a
+  time, and caches audio per voice, speed, and text. Roman numerals after a
+  label are read as numbers: "World War II" is "world war two".
 - **A real queue.** Add pages from the app or the CLI, let sift advance
   automatically, and reorder by drag, keyboard, or `sift move`.
 - **Keeps your place.** Every article is saved as an HTML snapshot plus
@@ -159,7 +161,8 @@ crossfade.
 - Saved-page and queue index: `~/.local/share/sift/sift.db`
 - Article snapshots: `~/.local/share/sift/articles/<id>/content.html`
 - Markdown exports: `~/Documents/sift/<slug>-<hash>.md` (configurable)
-- Kokoro audio cache: `~/.cache/sift/audio/` (1 GB cap by default)
+- Kokoro audio cache: `~/.cache/sift/audio/` (1 GB cap by default, about
+  six hours of speech)
 
 Markdown files get YAML frontmatter with `title`, `source`, `author`,
 `published`, `clipped`, `domain`, `word_count`, and `tags`. If you edit a
@@ -219,13 +222,17 @@ URL → hidden Qt WebEngine → Defuddle → HTML + Markdown + metadata
                                           │
    one persistent Qt WebEngine reader page; each article renders in place
                                           │
-        Kokoro /v1/audio/speech → MP3 cache → QMediaPlayer
+   Kokoro /v1/audio/speech (streamed PCM) → PCM cache → one QAudioSink
 ```
 
 `Intl.Segmenter` splits the rendered article into sentences inside the reader.
-The C++ engine preloads the rest of the current paragraph and the whole next
-paragraph through Kokoro, then caches each MP3 by voice, speed, and text. Code
-blocks and tables are skipped when speaking.
+The C++ engine asks Kokoro for one sentence at a time, nearest first: the
+sentence you are about to hear, then the rest of the paragraph and the next
+one. Kokoro runs concurrent requests together and each of them slows down, so a
+single request keeps the next sentence quick, and a jump aborts the request for
+a sentence you skipped. Audio is written to the output as it arrives and cached
+as raw PCM by voice, speed, and text. Code blocks and tables are skipped when
+speaking.
 
 ## Limitations
 
@@ -233,8 +240,6 @@ blocks and tables are skipped when speaking.
 - Anti-bot pages can block Qt WebEngine; the error banner reports the failure.
 - Article images stay linked to their source. The HTML snapshot is not a fully
   offline image archive.
-- Kokoro audio is cached per sentence, so there can be a short gap between
-  sentences while playback moves to the next file.
 - The app connects to Kokoro but does not manage the Docker container.
 
 ## Development

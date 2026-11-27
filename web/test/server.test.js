@@ -6,6 +6,7 @@ import { createApp } from "../server.js";
 import { isPrivateAddress } from "../src/extract.js";
 import { splitMp3 } from "../src/mp3.js";
 import { plainText, sanitize, textToHtml } from "../src/sanitize.js";
+import { Speech, spokenNumerals } from "../src/speech.js";
 import { announcement, cleanForSpeech, playingItem } from "../public/tts.js";
 import { describeVoice, previewText } from "../public/voices.js";
 
@@ -107,6 +108,91 @@ describe("mp3", () => {
         expect(audio[0]).toBe(0xff);
         expect(duration).toBeCloseTo(0.6, 5);
         expect(splitMp3(new Uint8Array([1, 2, 3]))).toMatchObject({ duration: null });
+    });
+});
+
+describe("speech queue", () => {
+    test("numerals after a label are spoken as numbers, like the desktop", () => {
+        expect(spokenNumerals("Part I of this book")).toBe("Part one of this book");
+        expect(spokenNumerals("after World War II ended")).toBe("after World War two ended");
+        expect(spokenNumerals("Chapter IV: the next step")).toBe("Chapter four: the next step");
+        expect(spokenNumerals("(Part I)")).toBe("(Part one)");
+        expect(spokenNumerals("Parts I and II")).toBe("Parts one and two");
+        expect(spokenNumerals("Phase XXIV")).toBe("Phase twenty-four");
+        expect(spokenNumerals("Henry VIII and I went")).toBe("Henry VIII and I went");
+        expect(spokenNumerals("the article I wrote")).toBe("the article I wrote");
+        expect(spokenNumerals("Type IIII and Class C")).toBe("Type IIII and Class C");
+    });
+
+    function slowKokoro() {
+        const log = { order: [], open: 0, maxOpen: 0, aborted: [], release: [] };
+        const fetcher = (url, options) => {
+            const text = JSON.parse(options.body).input;
+            log.order.push(text);
+            log.open++;
+            log.maxOpen = Math.max(log.maxOpen, log.open);
+            return new Promise((resolve, reject) => {
+                options.signal.addEventListener("abort", () => {
+                    log.open--;
+                    log.aborted.push(text);
+                    reject(new Error("aborted"));
+                });
+                log.release.push(() => {
+                    log.open--;
+                    resolve(new Response(new Uint8Array([1, 2, 3])));
+                });
+            });
+        };
+        return { log, fetcher };
+    }
+
+    const settle = () => Bun.sleep(5);
+
+    test("clips are made one at a time, urgent first", async () => {
+        const { log, fetcher } = slowKokoro();
+        const speech = new Speech({ endpoint: "http://kokoro", cacheDirectory: join(directory, "queue-a"), fetcher });
+        const jobs = [
+            speech.audio("First.", "af_heart", 1),
+            speech.audio("Second.", "af_heart", 1),
+            speech.audio("Waited on.", "af_heart", 1, { urgent: true }),
+        ];
+        await settle();
+        expect(log.order).toEqual(["First."]);
+        log.release.shift()();
+        await settle();
+        expect(log.order).toEqual(["First.", "Waited on."]);
+        log.release.shift()();
+        await settle();
+        log.release.shift()();
+        await Promise.all(jobs);
+        expect(log.order).toEqual(["First.", "Waited on.", "Second."]);
+        expect(log.maxOpen).toBe(1);
+    });
+
+    test("a clip nobody waits for is dropped or aborted", async () => {
+        const { log, fetcher } = slowKokoro();
+        const speech = new Speech({ endpoint: "http://kokoro", cacheDirectory: join(directory, "queue-b"), fetcher });
+        const stream = new AbortController();
+        const other = new AbortController();
+        const running = speech.audio("Playing.", "af_heart", 1, { signal: stream.signal });
+        const queued = speech.audio("Next.", "af_heart", 1, { signal: stream.signal });
+        // A second listener of the running clip keeps it alive.
+        const shared = speech.audio("Playing.", "af_heart", 1, { signal: other.signal });
+        await settle();
+        stream.abort();
+        await expect(queued).rejects.toThrow("Cancelled");
+        expect(log.aborted).toEqual([]);
+        const settled = Promise.allSettled([running, shared]);
+        other.abort();
+        for (const result of await settled) expect(result.reason?.message).toBe("Cancelled");
+        await settle();
+        expect(log.aborted).toEqual(["Playing."]);
+        expect(log.order).toEqual(["Playing."]);
+        // The queue moves on after an abort.
+        const after = speech.audio("After.", "af_heart", 1);
+        await settle();
+        log.release.at(-1)();
+        expect(await after).toEndWith(".mp3");
     });
 });
 

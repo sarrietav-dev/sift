@@ -1,12 +1,21 @@
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPointer>
 #include <QSqlDatabase>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include "kokoro.h"
 #include "library.h"
+#include "speech.h"
 #include "theme.h"
 #include "translator.h"
 #include "ttsengine.h"
@@ -68,6 +77,73 @@ bool setTimestamps(const QString &connection, const QString &dbPath,
     QSqlDatabase::removeDatabase(connection);
     return ok;
 }
+
+// A stand-in for Kokoro-FastAPI: answers /v1/audio/speech with chunked PCM,
+// split mid-sample the way a real chunked body may be, and records what was
+// asked and how many requests were open at once. Texts listed in `hold` get
+// no answer, so a test can watch a request being dropped.
+class FakeKokoro : public QObject {
+    Q_OBJECT
+
+public:
+    FakeKokoro() {
+        connect(&m_server, &QTcpServer::newConnection, this, [this] {
+            while (QTcpSocket *socket = m_server.nextPendingConnection()) {
+                ++open;
+                maxOpen = qMax(maxOpen, open);
+                connect(socket, &QTcpSocket::readyRead, this, [this, socket] { read(socket); });
+                connect(socket, &QTcpSocket::disconnected, this, [this, socket] {
+                    --open;
+                    if (socket->property("held").toBool())
+                        dropped << socket->property("text").toString();
+                    socket->deleteLater();
+                });
+            }
+        });
+        m_server.listen(QHostAddress::LocalHost);
+    }
+
+    QString endpoint() const { return QString("http://127.0.0.1:%1").arg(m_server.serverPort()); }
+
+    QStringList texts;
+    QStringList dropped;
+    QSet<QString> hold;
+    int open = 0;
+    int maxOpen = 0;
+
+private:
+    void read(QTcpSocket *socket) {
+        QByteArray data = socket->property("buffer").toByteArray() + socket->readAll();
+        socket->setProperty("buffer", data);
+        const qsizetype headerEnd = data.indexOf("\r\n\r\n");
+        if (headerEnd < 0)
+            return;
+        const QByteArray headers = data.left(headerEnd).toLower();
+        const qsizetype lengthAt = headers.indexOf("content-length:");
+        const int length = lengthAt < 0 ? 0 : headers.mid(lengthAt + 15, headers.indexOf("\r\n", lengthAt) - lengthAt - 15).trimmed().toInt();
+        if (data.size() < headerEnd + 4 + length)
+            return;
+        const QJsonObject body = QJsonDocument::fromJson(data.mid(headerEnd + 4, length)).object();
+        const QString text = body.value("input").toString();
+        texts << text;
+        socket->setProperty("text", text);
+        if (hold.contains(text)) {
+            socket->setProperty("held", true);
+            return;
+        }
+        QByteArray pcm;
+        for (qint16 sample : {1, 2, 3, 4})
+            pcm.append(reinterpret_cast<const char *>(&sample), 2);
+        QByteArray reply = "HTTP/1.1 200 OK\r\nContent-Type: audio/pcm\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+        for (const QByteArray &part : {pcm.left(3), pcm.mid(3)})
+            reply += QByteArray::number(part.size(), 16) + "\r\n" + part + "\r\n";
+        reply += "0\r\n\r\n";
+        socket->write(reply);
+        socket->disconnectFromHost();
+    }
+
+    QTcpServer m_server;
+};
 
 class SiftTests : public QObject {
     Q_OBJECT
@@ -236,6 +312,66 @@ private slots:
         // one, but nothing beyond it.
         const QList<int> paragraphs{0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2};
         QCOMPARE(TtsEngine::prefetchIndices(paragraphs, 0), QList<int>({1, 2, 3, 4, 5, 6, 7, 8}));
+    }
+
+    void numeralsAfterALabelAreSpokenAsNumbers() {
+        using speech::spokenNumerals;
+        QCOMPARE(spokenNumerals("Part I of this book"), QString("Part one of this book"));
+        QCOMPARE(spokenNumerals("Part II, “Auditing,” then"), QString("Part two, “Auditing,” then"));
+        QCOMPARE(spokenNumerals("after World War II ended"), QString("after World War two ended"));
+        QCOMPARE(spokenNumerals("Chapter IV: the next step"), QString("Chapter four: the next step"));
+        QCOMPARE(spokenNumerals("(Part I)"), QString("(Part one)"));
+        QCOMPARE(spokenNumerals("PART III"), QString("PART three"));
+        QCOMPARE(spokenNumerals("Parts I and II"), QString("Parts one and two"));
+        // Without a label a numeral may be a name or a letter.
+        QCOMPARE(spokenNumerals("Henry VIII and I went"), QString("Henry VIII and I went"));
+        // "I" after a lowercase label is the pronoun.
+        QCOMPARE(spokenNumerals("the article I wrote"), QString("the article I wrote"));
+        QCOMPARE(spokenNumerals("the war I remember"), QString("the war I remember"));
+        // Not a canonical numeral, or one past what has a word.
+        QCOMPARE(spokenNumerals("Type IIII"), QString("Type IIII"));
+        QCOMPARE(spokenNumerals("Class C"), QString("Class C"));
+        QCOMPARE(TtsEngine::cleanForSpeech("Part  II [12] begins."), QString("Part two begins."));
+    }
+
+    void speechIsAskedForOneSentenceAtATime() {
+        QTemporaryDir cache;
+        qputenv("XDG_CACHE_HOME", cache.path().toUtf8());
+        FakeKokoro server;
+        Kokoro kokoro;
+        kokoro.setEndpoint(server.endpoint());
+        TtsEngine engine(&kokoro);
+
+        // Opening an article asks for the title and then the first sentence,
+        // never both at once, and nothing further until playback starts.
+        engine.setSentences({"One.", "Two.", "Three."}, {0, 0, 1}, 0, "A title.");
+        QTRY_COMPARE(server.texts, QStringList({"A title.", "One."}));
+        QTRY_COMPARE(server.open, 0);
+        QCOMPARE(server.maxOpen, 1);
+        QTest::qWait(100);
+        QCOMPARE(server.texts.size(), 2);
+
+        // Both clips are cached as PCM; the same article opens without asking.
+        QDirIterator files(cache.path(), QStringList{"*.pcm"}, QDir::Files, QDirIterator::Subdirectories);
+        int cached = 0;
+        while (files.hasNext()) {
+            QCOMPARE(QFileInfo(files.next()).size(), 8);
+            ++cached;
+        }
+        QCOMPARE(cached, 2);
+        engine.setSentences({"One.", "Two.", "Three."}, {0, 0, 1}, 0, "A title.");
+        QTest::qWait(100);
+        QCOMPARE(server.texts.size(), 2);
+
+        // Moving the start drops the request for a sentence no longer wanted.
+        server.hold.insert("Two.");
+        engine.setStartSentence(1);
+        QTRY_COMPARE(server.texts.size(), 3);
+        engine.setStartSentence(2);
+        QTRY_COMPARE(server.dropped, QStringList({"Two."}));
+        QTRY_COMPARE(server.texts.last(), QString("Three."));
+        QCOMPARE(server.maxOpen, 1);
+        qunsetenv("XDG_CACHE_HOME");
     }
 
     void announcementsNameTheAuthor() {

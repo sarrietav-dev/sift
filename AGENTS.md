@@ -30,8 +30,9 @@ switch exists only in the test process. `SIFT_GUI_SCREENSHOT`,
 
 `web/` is a separate Bun app (sift for the phone): `bun install`, `bun test`,
 `bun server.js`. It shares no build with the Qt app, but keeps the desktop
-database schema and ports `src/reader.js` sentence wrapping and
-`TtsEngine::prefetchIndices`; change those in both places. See
+database schema, ports `src/reader.js` sentence wrapping, and ports
+`src/speech.cpp` numeral rules into `src/speech.js`; change those in both
+places. See
 `web/README.md` for deploy steps.
 
 The demo video is a separate Remotion project in `video/` (`npm i`,
@@ -74,9 +75,15 @@ and the i18n catalogs ship through `src/resources.qrc`. Consequences:
 - `Extractor` loads a page in a hidden `QWebEnginePage`, injects Defuddle at
   document creation, blocks non-text requests, and parses as soon as the DOM
   is usable. `defuddle.full.js` is vendored, MIT, and not to be edited.
-- `TtsEngine` synthesizes per sentence through `Kokoro`, caches MP3s by voice,
-  speed, and text, and prefetches the rest of the paragraph plus the next one
-  (`prefetchIndices` is static so it stays testable).
+- `TtsEngine` streams each sentence from `Kokoro` as 24 kHz PCM into one
+  push-mode `QAudioSink`, keeps a timeline of where each sentence starts in
+  that stream, and maps the sink's played bytes back to the current sentence.
+  Only one Kokoro request runs at a time, nearest first, and one for a
+  sentence playback has left is aborted (Kokoro slows every request down when
+  several run together). Clips are cached as `.pcm` by voice, speed, and the
+  cleaned text. `prefetchIndices` is static so it stays testable.
+- `speech.cpp` spells out Roman numerals after a label ("Part II"). The web
+  server's `src/speech.js` has the same rules; change both together.
 - The reader is one long-lived `WebEngineView` (no reload per article). C++
   builds an HTML shell with a nonce-based CSP in `Backend::readerShell`; QML
   calls `siftRender` / `siftApplyTheme` / `siftSetCurrent` through

@@ -9,6 +9,7 @@ HEADERS += \
     src/extractor.h \
     src/kokoro.h \
     src/library.h \
+    src/speech.h \
     src/theme.h \
     src/translator.h \
     src/ttsengine.h \
@@ -20,6 +21,7 @@ SOURCES += \
     src/extractor.cpp \
     src/kokoro.cpp \
     src/library.cpp \
+    src/speech.cpp \
     src/theme.cpp \
     src/translator.cpp \
     src/ttsengine.cpp \

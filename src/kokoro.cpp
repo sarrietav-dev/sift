@@ -9,10 +9,10 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QSaveFile>
 #include <QUrl>
 
 #include <algorithm>
+#include <memory>
 
 Kokoro::Kokoro(QObject *parent)
     : QObject(parent),
@@ -147,50 +147,59 @@ void Kokoro::refreshVoices() {
     });
 }
 
-void Kokoro::synthesize(const QString &text, const QString &voice, double speed, const QString &path,
-                        SynthCallback callback) {
-    if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
-        callback(path, {});
-        return;
-    }
-    QDir().mkpath(QFileInfo(path).absolutePath());
-
+QNetworkReply *Kokoro::stream(const QString &text, const QString &voice, double speed, ChunkCallback onChunk,
+                              DoneCallback onDone) {
     QJsonObject body;
     body["model"] = "kokoro";
     body["input"] = text;
     body["voice"] = voice;
-    body["response_format"] = "mp3";
+    body["response_format"] = "pcm";
     body["speed"] = speed;
-    body["stream"] = false;
+    body["stream"] = true;
 
     QNetworkRequest request(QUrl(m_endpoint + "/v1/audio/speech"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", "Bearer not-needed");
+    // The timeout counts silence between chunks. A cold server loading its
+    // model can take a while before the first one.
     request.setTransferTimeout(120000);
     QNetworkReply *reply = m_manager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
 
-    connect(reply, &QNetworkReply::finished, this, [reply, path, callback = std::move(callback)] {
+    // A chunked body may split a sample across two reads; keep the odd byte
+    // for the next one.
+    auto carry = std::make_shared<QByteArray>();
+    auto ok = [reply] {
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QByteArray audio = reply->readAll();
-        if (reply->error() != QNetworkReply::NoError || status != 200 || audio.isEmpty()) {
-            QString error = reply->errorString();
-            const QJsonObject object = QJsonDocument::fromJson(audio).object();
-            const QString detail = object.value("detail").toString();
-            if (!detail.isEmpty())
-                error = detail;
-            else if (status != 0)
-                error = QObject::tr("Kokoro returned HTTP %1").arg(status);
-            callback({}, error);
-            reply->deleteLater();
+        return reply->error() == QNetworkReply::NoError && status == 200;
+    };
+    connect(reply, &QNetworkReply::readyRead, this, [reply, carry, ok, onChunk] {
+        if (!ok())
             return;
-        }
-        QSaveFile file(path);
-        if (!file.open(QIODevice::WriteOnly) || file.write(audio) != audio.size() || !file.commit()) {
-            callback({}, QObject::tr("Could not save the audio for this sentence."));
-            reply->deleteLater();
+        carry->append(reply->readAll());
+        const qsizetype even = carry->size() & ~qsizetype(1);
+        if (even == 0)
             return;
-        }
-        callback(path, {});
-        reply->deleteLater();
+        const QByteArray samples = carry->left(even);
+        carry->remove(0, even);
+        onChunk(samples);
     });
+    connect(reply, &QNetworkReply::finished, this, [reply, ok, onDone = std::move(onDone)] {
+        reply->deleteLater();
+        if (reply->error() == QNetworkReply::OperationCanceledError)
+            return;
+        if (ok()) {
+            onDone({});
+            return;
+        }
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray detailBody = reply->readAll();
+        QString error = reply->errorString();
+        const QString detail = QJsonDocument::fromJson(detailBody).object().value("detail").toString();
+        if (!detail.isEmpty())
+            error = detail;
+        else if (status != 0)
+            error = QObject::tr("Kokoro returned HTTP %1").arg(status);
+        onDone(error);
+    });
+    return reply;
 }

@@ -9,7 +9,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 
 // Small client for the local Kokoro-FastAPI server. It knows how to check the
-// service, list voices, and turn one sentence into an MP3 file.
+// service, list voices, and stream one sentence as raw PCM.
 class Kokoro : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString endpoint READ endpoint WRITE setEndpoint NOTIFY endpointChanged)
@@ -18,7 +18,11 @@ class Kokoro : public QObject {
     Q_PROPERTY(QVariantList voices READ voices NOTIFY voicesChanged)
 
 public:
-    using SynthCallback = std::function<void(const QString &path, const QString &error)>;
+    using ChunkCallback = std::function<void(const QByteArray &pcm)>;
+    using DoneCallback = std::function<void(const QString &error)>;
+
+    // Kokoro speaks 16-bit mono PCM at this rate.
+    static constexpr int SampleRate = 24000;
 
     explicit Kokoro(QObject *parent = nullptr);
 
@@ -31,8 +35,13 @@ public:
     Q_INVOKABLE void checkHealth();
     Q_INVOKABLE void refreshVoices();
 
-    void synthesize(const QString &text, const QString &voice, double speed, const QString &path,
-                    SynthCallback callback);
+    // Ask Kokoro to speak `text` and hand each piece of audio to `onChunk` as
+    // the server makes it, always a whole number of samples. `onDone` runs
+    // once at the end with an empty error on success. Aborting the returned
+    // reply calls neither callback again, and the server stops after the
+    // segment it is working on.
+    QNetworkReply *stream(const QString &text, const QString &voice, double speed, ChunkCallback onChunk,
+                          DoneCallback onDone);
 
     static QVariantMap voiceInfo(const QString &id);
 
