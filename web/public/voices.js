@@ -286,7 +286,7 @@ export class VoicePicker {
         }
         if (run !== this.previewRun) return;
         this.audio.src = url;
-        this.audio.dataset.key = "";
+        this.audio.dataset.reading = "";
         this.audio.onended = () => run === this.previewRun && this.stopPreview(true);
         try {
             await this.audio.play();

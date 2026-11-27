@@ -4,14 +4,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../server.js";
 import { isPrivateAddress } from "../src/extract.js";
+import { splitMp3 } from "../src/mp3.js";
 import { plainText, sanitize, textToHtml } from "../src/sanitize.js";
-import { announcement, cleanForSpeech, prefetchIndices } from "../public/tts.js";
+import { announcement, cleanForSpeech, playingItem } from "../public/tts.js";
 import { describeVoice, previewText } from "../public/voices.js";
 
 const HOST = "sift.example";
 const PAGE = `<!doctype html><html><head><title>A page</title><link rel="canonical" href="/canonical"></head>
 <body><article><h1>A page</h1><p>First sentence. Second sentence with <a href="/next" onclick="x()">a link</a>.</p>
 <p><img src="/a.png" onerror="alert(1)"></p><script>alert(1)</script><p>${"Words go here. ".repeat(40)}</p></article></body></html>`;
+
+// A minimal MPEG-2 Layer III clip: an ID3v2 tag and then `frames` 384-byte
+// frames at 24 kHz, which is the shape Kokoro returns.
+function mp3(frames = 200) {
+    const frame = new Uint8Array(384);
+    frame.set([0xff, 0xf3, 0xc4, 0xc4]);
+    const bytes = new Uint8Array(10 + frames * frame.length);
+    bytes.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
+    for (let i = 0; i < frames; i++) bytes.set(frame, 10 + i * frame.length);
+    return bytes;
+}
 
 let directory;
 let app;
@@ -20,7 +32,7 @@ let kokoroCalls = 0;
 const fetcher = async (url, options = {}) => {
     if (String(url).endsWith("/v1/audio/speech")) {
         kokoroCalls++;
-        return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "audio/mpeg" } });
+        return new Response(mp3(), { headers: { "content-type": "audio/mpeg" } });
     }
     if (String(url).endsWith("/v1/audio/voices")) return Response.json({ voices: ["af_heart", "am_michael", "bad voice"] });
     return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
@@ -73,17 +85,28 @@ describe("sanitize", () => {
 });
 
 describe("speech helpers", () => {
-    test("prefetch covers the rest of the paragraph and the next one", () => {
-        const blocks = [0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8];
-        expect(prefetchIndices(blocks, 0)).toEqual([1, 2, 3, 4, 5, 6]);
-        expect(prefetchIndices(blocks, 4)).toEqual([5, 6, 7, 8, 9, 10]);
-        expect(prefetchIndices(blocks, 11)).toEqual([]);
+    test("audio time maps back to the item that is playing", () => {
+        expect(playingItem([1, 2, 3], 0, 0)).toBe(0);
+        expect(playingItem([1, 2, 3], 0, 1.5)).toBe(1);
+        expect(playingItem([1, 2, 3], 1, 0.2)).toBe(1);
+        expect(playingItem([1, 2, null, 3], 0, 2.5)).toBe(1);
+        expect(playingItem([1, 2, 3], 0, 99)).toBe(2);
     });
 
     test("cleaning and the title announcement match the desktop", () => {
         expect(cleanForSpeech("A claim [12] here.\n Next")).toBe("A claim here. Next");
         expect(announcement("Title", "Ann")).toBe("Title. By Ann.");
         expect(announcement("Title", "")).toBe("Title.");
+    });
+});
+
+describe("mp3", () => {
+    test("drops tags, keeps frames, and measures the clip", () => {
+        const { audio, duration } = splitMp3(mp3(25));
+        expect(audio.length).toBe(25 * 384);
+        expect(audio[0]).toBe(0xff);
+        expect(duration).toBeCloseTo(0.6, 5);
+        expect(splitMp3(new Uint8Array([1, 2, 3]))).toMatchObject({ duration: null });
     });
 });
 
@@ -169,6 +192,35 @@ describe("api", () => {
         await call("GET", path);
         expect(kokoroCalls).toBe(1);
         expect((await call("GET", "/api/speech?voice=bad&speed=1&text=x")).status).toBe(400);
+    });
+
+    test("a reading streams its clips and reports durations", async () => {
+        const created = await (await call("POST", "/api/readings", {
+            voice: "af_heart",
+            speed: 1,
+            texts: ["One.", "", "Two."],
+        })).json();
+        expect(typeof created.id).toBe("string");
+        const response = await call("GET", `/api/readings/${created.id}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toBe("audio/mpeg");
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        expect(bytes.length).toBe(2 * 200 * 384);
+        expect([...bytes.slice(0, 4)]).toEqual([0xff, 0xf3, 0xc4, 0xc4]);
+        expect(new TextDecoder("latin1").decode(bytes)).not.toContain("ID3");
+        const timing = await (await call("GET", `/api/readings/${created.id}/timing`)).json();
+        expect(timing.durations[0]).toBeCloseTo(4.8, 5);
+        expect(timing.durations[1]).toBe(0);
+        expect(timing.durations[2]).toBeCloseTo(4.8, 5);
+    });
+
+    test("readings validate their input and reject unknown ids", async () => {
+        expect((await call("POST", "/api/readings", { voice: "bad", speed: 1, texts: ["x"] })).status).toBe(400);
+        expect((await call("POST", "/api/readings", { voice: "af_heart", speed: 3, texts: ["x"] })).status).toBe(400);
+        expect((await call("POST", "/api/readings", { voice: "af_heart", speed: 1, texts: [] })).status).toBe(400);
+        expect((await call("POST", "/api/readings", { voice: "af_heart", speed: 1, texts: [1] })).status).toBe(400);
+        expect((await call("GET", "/api/readings/missing")).status).toBe(404);
+        expect((await call("GET", "/api/readings/missing/timing")).status).toBe(404);
     });
 
     test("voices come from Kokoro, filtered", async () => {

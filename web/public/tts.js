@@ -1,31 +1,6 @@
-// Speech fetching for the player: which sentences to preload, and a small
-// scheduler that asks the server for them in priority order.
-
-// Sentence indices to preload: the rest of this paragraph, then the whole
-// next one, crossing short blocks (headings, captions, list items) until at
-// least six sentences are ahead. Same window as TtsEngine::prefetchIndices.
-export function prefetchIndices(blocks, current) {
-    const indices = [];
-    if (current < 0 || current >= blocks.length) return indices;
-    const currentBlock = blocks[current];
-    if (currentBlock < 0) {
-        for (let i = current + 1; i <= current + 8 && i < blocks.length; i++) indices.push(i);
-        return indices;
-    }
-    const minimumAhead = 6;
-    let targetBlock = currentBlock;
-    let nextParagraph = false;
-    for (let i = current + 1; i < blocks.length && i - current <= 48; i++) {
-        const block = blocks[i];
-        if (block >= 0 && block !== targetBlock) {
-            if (nextParagraph && indices.length >= minimumAhead) break;
-            nextParagraph = true;
-            targetBlock = block;
-        }
-        indices.push(i);
-    }
-    return indices;
-}
+// Speech helpers for the player: cleaning text for Kokoro, the announcement
+// an article opens with, mapping audio time back to a sentence, and a small
+// cache that fetches voice previews.
 
 export function cleanForSpeech(text) {
     return String(text || "").replace(/\[\s*\d+\s*\]/g, "").replace(/\s+/g, " ").trim().slice(0, 4000);
@@ -39,19 +14,31 @@ export function announcement(title, author) {
     return cleanAuthor ? `${cleanTitle}. By ${cleanAuthor}.` : `${cleanTitle}.`;
 }
 
-export class Dropped extends Error {}
+// Which item of a continuous reading is playing `time` seconds into a stream
+// that started at `base`. Durations are known only for clips the server has
+// synthesized already, so stop at the first gap and report the last item that
+// is certain; the next poll fills the gap in.
+export function playingItem(durations, base, time) {
+    let elapsed = 0;
+    let last = base;
+    for (let i = base; i < durations.length; i++) {
+        const duration = durations[i];
+        if (duration == null) return last;
+        last = i;
+        if (time < elapsed + duration) return i;
+        elapsed += duration;
+    }
+    return last;
+}
 
-// Kokoro on a CPU synthesizes one clip at a time well; two in flight keep it
-// busy without starving the sentence the listener is waiting for. Requests
-// fall out of the queue when playback moves away from them.
+// Kokoro on a CPU synthesizes a preview in about a second. Entries are kept
+// by voice, speed, and text so replaying one never asks twice; the oldest
+// previews are dropped once the cache fills.
 export class AudioStore {
-    constructor({ concurrency = 2, limit = 96, fetcher = (...args) => fetch(...args) } = {}) {
-        this.concurrency = concurrency;
+    constructor({ limit = 96, fetcher = (...args) => fetch(...args) } = {}) {
         this.limit = limit;
         this.fetcher = fetcher;
         this.entries = new Map();
-        this.wanted = [];
-        this.active = 0;
     }
 
     static key(text, voice, speed) {
@@ -74,40 +61,14 @@ export class AudioStore {
         return entry;
     }
 
-    // `items` is [{text, voice, speed}] in the order they are needed; the
-    // first one is the clip playback is waiting on.
-    want(items) {
-        const entries = items.filter(item => item.text).map(item => this.entry(item.text, item.voice, item.speed));
-        this.wanted = entries.map(entry => entry.key);
-        const keep = new Set(this.wanted);
-        for (const [key, entry] of this.entries) {
-            if (entry.status === "queued" && !keep.has(key)) {
-                this.entries.delete(key);
-                entry.reject(new Dropped());
-            }
-        }
-        this.pump();
-        return entries;
-    }
-
-    // A voice preview jumps the queue: the listener is waiting on it.
     preview(text, voice, speed) {
         const entry = this.entry(text, voice, speed);
         if (entry.status === "queued") this.load(entry);
         return entry;
     }
 
-    pump() {
-        for (const key of this.wanted) {
-            if (this.active >= this.concurrency) break;
-            const entry = this.entries.get(key);
-            if (entry && entry.status === "queued") this.load(entry);
-        }
-    }
-
     async load(entry) {
         entry.status = "loading";
-        this.active++;
         try {
             const query = new URLSearchParams({ voice: entry.voice, speed: entry.speed.toFixed(2), text: entry.text });
             const response = await this.fetcher("/api/speech?" + query);
@@ -120,19 +81,15 @@ export class AudioStore {
             entry.status = "error";
             entry.reject(error);
         } finally {
-            this.active--;
             this.evict();
-            this.pump();
         }
     }
 
     evict() {
         const ready = [...this.entries.values()].filter(entry => entry.status === "ready");
         if (ready.length <= this.limit) return;
-        const keep = new Set(this.wanted);
         ready.sort((a, b) => a.used - b.used);
         for (const entry of ready.slice(0, ready.length - this.limit)) {
-            if (keep.has(entry.key)) continue;
             URL.revokeObjectURL(entry.url);
             this.entries.delete(entry.key);
         }

@@ -5,8 +5,9 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ExtractError, extract } from "./src/extract.js";
 import { Library } from "./src/library.js";
+import { splitMp3 } from "./src/mp3.js";
 import { textToHtml } from "./src/sanitize.js";
-import { Speech, SpeechError } from "./src/speech.js";
+import { cleanForSpeech, Speech, SpeechError } from "./src/speech.js";
 
 const ROOT = import.meta.dir;
 const PUBLIC = join(ROOT, "public");
@@ -63,6 +64,73 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
     const files = staticFiles();
     const allowedHosts = new Set(hosts);
     const refreshing = new Map();
+
+    // A reading is the list of sentences of one article in one voice, kept in
+    // memory so the phone can play it as a single continuous stream instead of
+    // fetching one clip per sentence. Durations are filled in as the stream
+    // synthesizes; the player polls them to know which sentence is speaking.
+    const readings = new Map();
+    const READING_LIMIT = 24;
+    const READING_TTL = 2 * 60 * 60 * 1000;
+
+    function remember(reading) {
+        const now = Date.now();
+        for (const [id, entry] of readings) {
+            if (now - entry.at > READING_TTL) readings.delete(id);
+        }
+        readings.set(reading.id, reading);
+        while (readings.size > READING_LIMIT) readings.delete(readings.keys().next().value);
+    }
+
+    function warmReading(reading, from = 0) {
+        for (const text of reading.texts.slice(from, from + 2)) {
+            if (cleanForSpeech(text)) speech.audio(text, reading.voice, reading.speed).catch(() => {});
+        }
+    }
+
+    // Two clips are synthesized ahead so one slow sentence does not drain the
+    // browser's buffer; they leave in order, so the stream stays sequential.
+    function audioStream(reading, from) {
+        let next = from;
+        let stopped = false;
+        const ahead = [];
+        const make = index => {
+            if (stopped || !cleanForSpeech(reading.texts[index])) return { audio: new Uint8Array(0), duration: 0 };
+            return speech.audio(reading.texts[index], reading.voice, reading.speed)
+                .then(file => Bun.file(file).arrayBuffer())
+                .then(bytes => splitMp3(new Uint8Array(bytes)));
+        };
+        const fill = () => {
+            while (ahead.length < 2 && next < reading.texts.length) {
+                const index = next++;
+                ahead.push({ index, clip: make(index) });
+            }
+        };
+        fill();
+        return new ReadableStream({
+            async pull(controller) {
+                while (ahead.length) {
+                    const { index, clip } = ahead.shift();
+                    try {
+                        const { audio, duration } = await clip;
+                        reading.durations[index] = duration;
+                        fill();
+                        if (audio.length) {
+                            controller.enqueue(audio);
+                            return;
+                        }
+                    } catch (error) {
+                        controller.error(error);
+                        return;
+                    }
+                }
+                controller.close();
+            },
+            cancel() {
+                stopped = true;
+            },
+        });
+    }
 
     // Articles synced from another machine carry text but no HTML snapshot.
     // Fetching the page again restores images and formatting; one refresh per
@@ -139,6 +207,46 @@ export function createApp({ dataDirectory, kokoroUrl, hosts, fetcher = fetch }) 
             } catch (error) {
                 return failure(error.message, error instanceof SpeechError && error.message.startsWith("Invalid") ? 400 : 502);
             }
+        }
+
+        if (path === "/api/readings" && method === "POST") {
+            const { voice, speed, texts, warm } = await body(request);
+            if (typeof voice !== "string" || !/^[a-z]{2}_[a-z0-9_]+$/.test(voice)) return failure("Invalid voice", 400);
+            if (typeof speed !== "number" || !(speed >= 0.5 && speed <= 2)) return failure("Invalid speed", 400);
+            if (!Array.isArray(texts) || !texts.length || texts.length > 5000) return failure("Invalid reading", 400);
+            let length = 0;
+            for (const text of texts) {
+                if (typeof text !== "string" || text.length > 4000) return failure("Invalid reading", 400);
+                length += text.length;
+            }
+            if (length > 1_000_000) return failure("Invalid reading", 400);
+            const reading = {
+                id: crypto.randomUUID(),
+                at: Date.now(),
+                voice,
+                speed,
+                texts,
+                durations: new Array(texts.length).fill(null),
+            };
+            remember(reading);
+            if (Number.isInteger(warm)) warmReading(reading, Math.max(0, Math.min(warm, texts.length)));
+            return json({ id: reading.id });
+        }
+
+        if ((match = path.match(/^\/api\/readings\/([\w-]+)$/)) && method === "GET") {
+            const reading = readings.get(match[1]);
+            if (!reading) return failure("No such reading", 404);
+            const requested = Math.floor(Number(url.searchParams.get("at")));
+            const at = Number.isFinite(requested) ? Math.min(Math.max(0, requested), reading.texts.length) : 0;
+            return new Response(audioStream(reading, at), {
+                headers: headers("audio/mpeg", { "cache-control": "no-store", "x-accel-buffering": "no" }),
+            });
+        }
+
+        if ((match = path.match(/^\/api\/readings\/([\w-]+)\/timing$/)) && method === "GET") {
+            const reading = readings.get(match[1]);
+            if (!reading) return failure("No such reading", 404);
+            return json({ durations: reading.durations });
         }
 
         if ((match = path.match(/^\/api\/articles\/([\w-]+)$/)) && method === "GET") {

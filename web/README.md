@@ -23,8 +23,9 @@ proxies speech to a private Kokoro-FastAPI container.
   sentences and paragraphs as the desktop reader. The current sentence is
   highlighted and followed; scrolling by hand pauses following until you tap
   **Back to playback**.
-- Speech preloads the rest of the paragraph plus the next one, two clips at a
-  time, and the server caches every clip on disk by voice, speed, and text.
+- An article plays as one continuous stream, so the phone keeps reading with
+  the screen off or another app in front. The server synthesizes ahead and
+  joins the clips, and caches every one on disk by voice, speed, and text.
   Opening an article synthesizes its first clip before you press play.
 - Colors are Flexoki, light or dark from the system setting. Text is Atkinson
   Hyperlegible Next, served with the page.
@@ -72,6 +73,9 @@ fetch pages on private or tailnet addresses.
 `127.0.0.1:8777` for a reverse proxy in front of it and runs as uid 1000, so
 `./data` must be writable by that user. Put the public hostname in a `.env`
 next to `compose.yaml`, for example `SIFT_HOSTS=sift.example.com,localhost`.
+The reading stream is sent without a `Content-Length`, which Caddy flushes
+immediately; other proxies need response buffering off (`proxy_buffering off`
+in nginx).
 
 ```sh
 rsync -a --delete --exclude node_modules --exclude data --exclude .env web/ server:apps/sift/

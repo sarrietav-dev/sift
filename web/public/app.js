@@ -1,6 +1,6 @@
 import { QueueList, renderLibrary } from "./queue.js";
 import { renderArticle } from "./reader.js";
-import { AudioStore, Dropped, announcement, cleanForSpeech, prefetchIndices } from "./tts.js";
+import { AudioStore, announcement, cleanForSpeech, playingItem } from "./tts.js";
 import { VoicePicker } from "./voices.js";
 
 const $ = id => document.getElementById(id);
@@ -31,7 +31,6 @@ const state = {
     article: null,
     sentences: [],
     speech: [],
-    blocks: [],
     index: 0,
     intro: "",
     introPending: false,
@@ -222,6 +221,11 @@ function renderMeta(article) {
 async function open(id, { autoplay = false } = {}) {
     const token = ++openToken;
     pause();
+    reading = null;
+    pendingReading = null;
+    audio.onended = null;
+    audio.removeAttribute("src");
+    audio.load();
     if (!desktop.matches) setDrawer(false);
     const preview = state.queue.find(item => item.id === id) || state.articles.find(item => item.id === id);
     $("empty").hidden = true;
@@ -255,7 +259,6 @@ async function open(id, { autoplay = false } = {}) {
     const sentences = renderArticle($("content"), article);
     state.sentences = sentences.map(sentence => sentence.element);
     state.speech = sentences.map(sentence => cleanForSpeech(sentence.text));
-    state.blocks = sentences.map(sentence => sentence.block);
     state.index = article.readState === 2 ? 0 : Math.min(Math.max(0, article.lastSentence || 0), Math.max(0, sentences.length - 1));
     state.intro = cleanForSpeech(announcement(article.title, article.author));
     state.introPending = state.index === 0 && !!state.intro;
@@ -329,23 +332,53 @@ $("resume").addEventListener("click", () => {
 
 // ---------------------------------------------------------------- playback
 
-function clip(index, intro) {
-    return { text: intro ? state.intro : state.speech[index], voice: state.voice, speed: state.speed };
+// An article plays as one continuous stream, not one clip per sentence. A
+// single long-lived media element is what keeps playback going when the phone
+// locks or the page is put away; a chain of short clips goes quiet at the
+// first boundary. The server reports each clip's duration as it synthesizes,
+// so audio time maps back to the sentence being spoken.
+let reading = null;
+let pendingReading = null;
+let streamBase = 0;
+let streamOffset = 0;
+let timingTimer = 0;
+let retried = false;
+let pausedAt = 0;
+
+function startItem(index, intro) {
+    // Item zero is the announcement when an article has one; starting
+    // anywhere else skips it.
+    return intro ? 0 : index + (state.intro ? 1 : 0);
 }
 
-function wanted(index, intro) {
-    const items = [];
-    if (intro) items.push(clip(0, true));
-    items.push(clip(index, false));
-    for (const next of prefetchIndices(state.blocks, index)) items.push(clip(next, false));
-    return items;
+function ensureReading(warmFrom = 0) {
+    const article = state.article;
+    const voice = state.voice;
+    const speed = state.speed;
+    if (reading && reading.article === article.id && reading.voice === voice && reading.speed === speed)
+        return Promise.resolve(reading);
+    const key = [article.id, voice, speed].join("|");
+    if (pendingReading && pendingReading.key === key) return pendingReading.promise;
+    const texts = state.intro ? [state.intro, ...state.speech] : state.speech.slice();
+    const promise = api("/api/readings", { method: "POST", body: { voice, speed, texts, warm: warmFrom } })
+        .then(({ id }) => {
+            pendingReading = null;
+            reading = { id, article: article.id, voice, speed, intro: !!state.intro, durations: [] };
+            return reading;
+        }, error => {
+            pendingReading = null;
+            throw error;
+        });
+    pendingReading = { key, promise };
+    return promise;
 }
 
-// Opening an article asks for its first clip right away, so pressing play
-// rarely waits on Kokoro.
+// Opening an article creates its reading and asks for the first clips right
+// away, so pressing play rarely waits on Kokoro.
 function warm() {
     if (!state.article || !state.speech.length) return;
-    store.want(wanted(state.index, state.introPending).slice(0, 2));
+    const intro = state.index === 0 && state.introPending && !!state.intro;
+    ensureReading(startItem(state.index, intro)).catch(() => {});
 }
 
 function setBuffering(value) {
@@ -362,64 +395,78 @@ function updateTransport() {
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";
 }
 
-async function play(index = state.index) {
+function syncIndex() {
+    if (!reading) return;
+    const item = playingItem(reading.durations, streamBase, audio.currentTime);
+    const sentence = Math.max(0, Math.min(item - streamOffset, state.sentences.length - 1));
+    if (streamOffset && item >= streamOffset) state.introPending = false;
+    if (sentence === state.index) return;
+    state.index = sentence;
+    highlight();
+    saveProgress();
+}
+
+function pollTiming(run) {
+    clearTimeout(timingTimer);
+    const current = reading;
+    if (!current) return;
+    const tick = async () => {
+        if (run !== generation || !state.playing || reading !== current) return;
+        try {
+            const { durations } = await api(`/api/readings/${current.id}/timing`);
+            if (run === generation && reading === current && Array.isArray(durations)) {
+                current.durations = durations;
+                syncIndex();
+            }
+        } catch {}
+        if (run === generation && state.playing && reading === current)
+            timingTimer = setTimeout(tick, document.hidden ? 5000 : 1500);
+    };
+    timingTimer = setTimeout(tick, 250);
+}
+
+async function play(index = state.index, { retry = false } = {}) {
     if (!state.article || !state.sentences.length) return;
+    if (!retry) retried = false;
     voicePicker.cancel();
     const run = ++generation;
     state.index = Math.max(0, Math.min(index, state.sentences.length - 1));
     if (state.index !== 0) state.introPending = false;
-    const intro = state.introPending;
+    const intro = state.index === 0 && state.introPending && !!state.intro;
     state.playing = true;
     updateTransport();
     highlight();
     saveProgress();
 
-    if (!intro && !state.speech[state.index]) return advance(run);
-
-    const [entry] = store.want(wanted(state.index, intro));
-    setBuffering(entry.status !== "ready");
-    let url;
+    let current;
     try {
-        url = await entry.promise;
+        current = await ensureReading(startItem(state.index, intro));
     } catch (error) {
-        if (run !== generation || error instanceof Dropped) return;
+        if (run !== generation) return;
         setBuffering(false);
         pause();
         toast(error.message === "Kokoro unavailable" ? "The voice server is not answering." : error.message);
         return;
     }
     if (run !== generation) return;
-    audio.src = url;
-    audio.dataset.key = entry.key;
-    bindEnded(run, intro);
+
+    streamOffset = current.intro ? 1 : 0;
+    streamBase = intro ? 0 : state.index + streamOffset;
+    audio.src = `/api/readings/${current.id}?at=${streamBase}`;
+    audio.dataset.reading = current.id;
+    audio.onended = () => {
+        if (run === generation) finish();
+    };
+    setBuffering(true);
     try {
         await audio.play();
     } catch {
         if (run === generation) pause();
         return;
     }
-    if (run === generation) setBuffering(false);
-}
-
-function bindEnded(run, intro) {
-    audio.onended = () => {
-        if (run !== generation) return;
-        if (intro) {
-            state.introPending = false;
-            play(state.index);
-        } else {
-            advance(run);
-        }
-    };
-}
-
-function advance(run) {
     if (run !== generation) return;
-    if (state.index + 1 < state.sentences.length) {
-        play(state.index + 1);
-        return;
-    }
-    finish();
+    setBuffering(false);
+    pollTiming(run);
 }
 
 function finish() {
@@ -439,28 +486,32 @@ function pause() {
     generation++;
     audio.pause();
     state.playing = false;
+    pausedAt = Date.now();
     setBuffering(false);
     $("resume").hidden = true;
+    clearTimeout(timingTimer);
     updateTransport();
 }
 
 function resume() {
     voicePicker.cancel();
-    // A paused clip of the current sentence picks up mid-sentence; anything
-    // else starts the sentence over.
-    const intro = state.introPending;
-    const current = store.entries.get(audio.dataset.key);
-    const expected = clip(state.index, intro);
-    if (current && current.url === audio.src && current.text === expected.text && current.voice === expected.voice
-        && current.speed === expected.speed && audio.currentTime > 0 && !audio.ended) {
+    // A short pause picks up the buffered stream mid-sentence. After a long
+    // pause the connection may be gone, so start the sentence it reached over
+    // instead of letting the stream restart from its first byte.
+    const live = reading && audio.dataset.reading === reading.id && !audio.error && audio.currentTime > 0
+        && !audio.ended && Date.now() - pausedAt < 30000;
+    if (live) {
         const run = ++generation;
         state.playing = true;
         state.following = true;
         updateTransport();
+        syncIndex();
         highlight();
-        bindEnded(run, intro);
-        store.want(wanted(state.index, intro));
-        audio.play().catch(() => run === generation && pause());
+        audio.onended = () => {
+            if (run === generation) finish();
+        };
+        audio.play().catch(() => run === generation && play(state.index));
+        pollTiming(run);
         return;
     }
     state.following = true;
@@ -492,8 +543,36 @@ $("play").addEventListener("click", toggle);
 $("prev").addEventListener("click", () => step(-1));
 $("next").addEventListener("click", () => step(1));
 
+audio.addEventListener("timeupdate", () => state.playing && syncIndex());
 audio.addEventListener("waiting", () => state.playing && setBuffering(true));
-audio.addEventListener("playing", () => setBuffering(false));
+audio.addEventListener("playing", () => {
+    retried = false;
+    setBuffering(false);
+});
+audio.addEventListener("error", () => {
+    if (!state.playing || !audio.currentSrc) return;
+    if (retried) {
+        pause();
+        toast("Playback stopped. Press play to continue.");
+        return;
+    }
+    // A dropped stream (server restart, network change) is retried once from
+    // the sentence that was playing.
+    retried = true;
+    const index = state.index;
+    reading = null;
+    pendingReading = null;
+    audio.onended = null;
+    setTimeout(() => {
+        if (state.playing) play(index, { retry: true });
+    }, 1000);
+});
+
+// Timers are throttled while the page is away; catch sentence tracking up as
+// soon as it is back.
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.playing && reading) pollTiming(generation);
+});
 
 function setMediaMetadata() {
     if (!("mediaSession" in navigator) || !state.article) return;
